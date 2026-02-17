@@ -1,6 +1,7 @@
 
 export type CourseStatus = 'Active' | 'Pending' | 'Scheduled' | 'Postponed' | 'active' | 'scheduled' | 'frozen';
 export type AdmissionStatus = 'Pending' | 'Approved' | 'Rejected';
+export type RegisterStatus = 'Approved' | 'Suspended' | 'Active' | 'Certified' | 'Rusticated';
 export type ExamType = '1st Term' | '2nd Term' | 'Final Exam' | 'Board Exam';
 export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused';
 export type ScheduleStatus = 'Scheduled' | 'Live' | 'Completed';
@@ -8,10 +9,8 @@ export type AlertCategory = 'Admission' | 'Result' | 'Schedule' | 'Urgent';
 
 export interface Course {
   id: string;
-  name?: string; 
-  title?: string;
+  name: string; 
   thumbnail?: string; 
-  image?: string;
   instructorName: string;
   instructorImage: string;
   content: string;
@@ -19,14 +18,13 @@ export interface Course {
   duration: string;
   status: CourseStatus;
   mode?: 'ON CAMPUS' | 'ONLINE';
-  category?: 'Vocational' | 'Technical' | 'Creative' | 'Professional';
-  modules?: CourseModule[];
-}
-
-export interface CourseModule {
-  id: string;
-  title: string;
-  duration: string;
+  category?: string;
+  // Fix: Added optional modules array for curriculum tracking in LMS.tsx
+  modules?: {
+    id: string;
+    title: string;
+    duration: string;
+  }[];
 }
 
 export interface User {
@@ -43,73 +41,8 @@ export interface User {
   badges?: string[];
 }
 
-export interface Instructor {
-  id: string;
-  userId: string; // link to User table
-  name: string;
-  qualification: string;
-  subject: string;
-  classAssignment: string;
-  image: string;
-}
-
-export interface ExamResult {
-  id: string;
-  studentId: string; // matches regNumber or admissionId
-  examType: ExamType;
-  paperTotal: number;
-  paperObtained: number;
-  practicalTotal: number;
-  practicalObtained: number;
-  assignmentTotal: number;
-  assignmentObtained: number;
-  position: string;
-  remarks: string;
-  datePublished: string;
-}
-
-export interface AttendanceRecord {
-  id: string;
-  studentId: string; // matches User.regNumber
-  courseId: string;  // matches Course.id
-  date: string;      // YYYY-MM-DD
-  status: AttendanceStatus;
-  joinTime: string;
-  durationMinutes: number;
-  remarks?: string; // For manual overrides
-}
-
-export interface SessionSchedule {
-  id: string;
-  courseId: string;
-  topic: string;
-  startTime: string; // ISO string
-  status: ScheduleStatus;
-}
-
-export interface NewsAlert {
-  id: string;
-  category: AlertCategory;
-  title: string;
-  content: string;
-  actionText: string;
-  actionPage: string;
-  expiresAt: string; // ISO
-  priority: 'Normal' | 'High';
-}
-
-export interface Product {
-  id: string;
-  name: string;
-  price: string;
-  image: string;
-  slogan: string;
-  description: string;
-}
-
 export interface AdmissionForm {
   id: string;
-  regNumber?: string; // assigned on approval
   firstName: string;
   lastName: string;
   cnic: string;
@@ -127,48 +60,95 @@ export interface AdmissionForm {
   photo?: string;
   status: AdmissionStatus;
   isDraft: boolean;
+  // Fix: Added optional regNumber as it is used for tracking and result lookups in Results.tsx
+  regNumber?: string;
 }
 
-export interface ChatMessage {
+export interface AdmissionWithdrawal {
   id: string;
-  role: 'instructor' | 'student';
-  text: string;
-  userName: string;
-  timestamp: string;
+  admissionId: string;
+  enrollmentSerial: number;
+  regNumber: string;
+  studentName: string;
+  cnic: string;
+  courseId: string;
+  admissionDate: string;
+  withdrawalDate?: string;
+  status: RegisterStatus;
+  remarks?: string;
 }
 
-export interface ClassroomParticipant {
+export interface NewsAlert {
+  id: string;
+  category: AlertCategory;
+  title: string;
+  content: string;
+  actionText: string;
+  actionPage: string;
+  expiresAt: string;
+  priority: 'Normal' | 'High';
+}
+
+export interface Product {
   id: string;
   name: string;
-  role: 'instructor' | 'student';
-  avatar?: string;
-  isMuted: boolean;
-  isCameraOff: boolean;
-  isHandRaised: boolean;
-  isLive: boolean;
-  isSpeaking: boolean;
+  price: string;
+  image: string;
+  slogan: string;
+  description: string;
 }
 
-// LMS Enhanced Features
+export interface ExamResult {
+  id: string;
+  studentId: string;
+  examType: ExamType;
+  paperTotal: number;
+  paperObtained: number;
+  practicalTotal: number;
+  practicalObtained: number;
+  assignmentTotal: number;
+  assignmentObtained: number;
+  position: string;
+  remarks: string;
+  datePublished: string;
+}
+
+export interface SessionSchedule {
+  id: string;
+  courseId: string;
+  topic: string;
+  startTime: string;
+  status: ScheduleStatus;
+}
+
+/**
+ * Fix: Added missing interfaces requested by components across the application
+ */
+
+export interface Instructor {
+  id: string;
+  userId: string;
+  name: string;
+  qualification: string;
+  subject: string;
+  classAssignment: string;
+  image: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  studentId: string;
+  courseId: string;
+  date: string;
+  status: AttendanceStatus;
+  remarks?: string;
+}
+
 export interface Quiz {
   id: string;
   courseId: string;
   title: string;
-  questions: QuizQuestion[];
-}
-
-export interface QuizQuestion {
-  id: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-}
-
-export interface UserProgress {
-  userId: string;
-  courseId: string;
-  completedModuleIds: string[];
-  quizScores: { quizId: string; score: number }[];
+  questions: any[];
 }
 
 export interface DiscussionPost {
@@ -180,13 +160,32 @@ export interface DiscussionPost {
   title: string;
   content: string;
   timestamp: string;
-  replies: DiscussionReply[];
+  replies: any[];
 }
 
-export interface DiscussionReply {
-  id: string;
+export interface UserProgress {
   userId: string;
+  courseId: string;
+  completedModules: string[];
+  percentage: number;
+}
+
+export interface ClassroomParticipant {
+  id: string;
+  name: string;
+  avatar?: string;
+  role: string;
+  isMuted: boolean;
+  isCameraOff: boolean;
+  isHandRaised: boolean;
+  isLive: boolean;
+  isSpeaking: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'instructor' | 'student';
+  text: string;
   userName: string;
-  content: string;
   timestamp: string;
 }
