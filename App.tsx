@@ -18,6 +18,7 @@ import About from './pages/About';
 import Donate from './pages/Donate';
 import { LiveSessionProvider } from './components/LiveSessionContext';
 import { supabase } from './lib/supabase';
+import { Activity, Wifi, WifiOff } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('home');
@@ -32,15 +33,16 @@ const App: React.FC = () => {
   const [schedules, setSchedules] = useState<SessionSchedule[]>([]);
   const [alerts, setAlerts] = useState<NewsAlert[]>([]);
   const [usersList, setUsersList] = useState<User[]>([]);
-  // Added missing data states
   const [progress, setProgress] = useState<UserProgress[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [discussions, setDiscussions] = useState<DiscussionPost[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'checking'>('checking');
 
   const refreshData = async () => {
     try {
+      setDbStatus('checking');
       const db = await getDB();
       setCourses(db.courses);
       setProducts(db.products);
@@ -51,13 +53,14 @@ const App: React.FC = () => {
       setSchedules(db.schedules);
       setAlerts(db.alerts);
       setUsersList(db.users);
-      // Synchronize missing data states
       setProgress(db.progress);
       setAttendance(db.attendance);
       setDiscussions(db.discussions);
       setQuizzes(db.quizzes);
+      setDbStatus('online');
     } catch (err) {
       console.error("Database connection failed", err);
+      setDbStatus('offline');
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +105,27 @@ const App: React.FC = () => {
     setCurrentPage('home');
   };
 
-  // Database Handlers (Refactored for Supabase)
+  // Helper to map camelCase (frontend) to snake_case (DB)
+  const mapAdmissionToDB = (form: AdmissionForm) => ({
+    first_name: form.firstName,
+    last_name: form.lastName,
+    cnic: form.cnic,
+    dob: form.dob,
+    gender: form.gender,
+    qualification: form.qualification,
+    occupation: form.occupation,
+    guardian_name: form.guardianName,
+    whatsapp: form.whatsapp,
+    guardian_whatsapp: form.guardianWhatsapp,
+    relation: form.relation,
+    address: form.address,
+    email: form.email,
+    course_id: form.courseId,
+    photo: form.photo,
+    status: 'Pending',
+    is_draft: form.isDraft
+  });
+
   const handleUpdateCourse = async (updatedCourse: Course) => {
     const { id, ...data } = updatedCourse;
     await supabase.from('courses').update(data).eq('id', id);
@@ -120,16 +143,41 @@ const App: React.FC = () => {
   };
 
   const handleSubmitAdmission = async (form: AdmissionForm) => {
-    const { id, ...data } = form;
-    await supabase.from('admission_forms').insert({ ...data, status: 'Pending', is_draft: false });
-    refreshData();
+    const dbPayload = mapAdmissionToDB(form);
+    const { error } = await supabase.from('admission_forms').insert(dbPayload);
+    if (error) {
+      console.error("Submission error:", error);
+      alert("Database error. Please check your connection.");
+    } else {
+      refreshData();
+    }
   };
 
   const handleUpdateAdmission = async (id: string, status: 'Approved' | 'Rejected') => {
-    const studentIdPart = id.slice(0, 4);
-    const yearPart = new Date().getFullYear();
-    const regNumber = status === 'Approved' ? `AKTVI/${studentIdPart}/${yearPart}` : null;
-    await supabase.from('admission_forms').update({ status, reg_number: regNumber }).eq('id', id);
+    const { data: admission, error: fetchError } = await supabase
+      .from('admission_forms')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !admission) return;
+
+    // 1. Update status in forms table
+    await supabase.from('admission_forms').update({ status }).eq('id', id);
+
+    // 2. If approved, transfer to withdrawal register
+    if (status === 'Approved') {
+      const { error: regError } = await supabase.from('admission_withdrawal').insert({
+        admission_id: id,
+        student_name: `${admission.first_name} ${admission.last_name}`,
+        cnic: admission.cnic,
+        course_id: admission.course_id,
+        status: 'Enrolled'
+      });
+      
+      if (regError) console.error("Register transfer error:", regError);
+    }
+    
     refreshData();
   };
 
@@ -297,6 +345,26 @@ const App: React.FC = () => {
               <p className="text-teal-200 text-xs font-urdu leading-relaxed">
                 اکبر خان فاؤنڈیشن پسماندہ خواتین کو مفت اعلیٰ معیار کی تکنیکی تعلیم فراہم کرتی ہے، جو سرٹیفکیٹس سے آگے مستقبل کی تعمیر کرتی ہے۔
               </p>
+              
+              {/* Database Connectivity Indicator */}
+              <div className="mt-8 flex items-center gap-3 bg-black/20 p-3 rounded-2xl border border-white/5 w-fit">
+                {dbStatus === 'online' ? (
+                  <>
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981] animate-pulse"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Database Core: Online</span>
+                  </>
+                ) : dbStatus === 'offline' ? (
+                  <>
+                    <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_#f43f5e]"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Database Core: Offline</span>
+                  </>
+                ) : (
+                  <>
+                    <Activity className="w-3 h-3 text-teal-400 animate-spin" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">Verifying Connection...</span>
+                  </>
+                )}
+              </div>
             </div>
             <div>
               <h4 className="font-bold text-sm uppercase tracking-widest mb-6 border-b border-teal-800 pb-2">Institutional Info</h4>
