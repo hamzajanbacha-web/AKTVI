@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { X, Lock, User as UserIcon, Calendar, KeyRound, ArrowLeft, AlertCircle, ShieldCheck } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { mapUser } from '../db';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -19,37 +21,63 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
   const [newPassword, setNewPassword] = useState('');
   const [verifyPassword, setVerifyPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const user = users.find(u => u.username === userId && u.password === password);
-    if (user) {
-      onLogin(user);
-    } else {
-      setError("Invalid username or password");
+    setIsProcessing(true);
+
+    try {
+      // Query database directly for the user
+      const { data, error: dbError } = await supabase
+        .from('users_table')
+        .select('*')
+        .eq('username', userId)
+        .eq('password', password)
+        .single();
+
+      if (dbError || !data) {
+        setError("Invalid username or password");
+      } else {
+        onLogin(mapUser(data));
+      }
+    } catch (err) {
+      setError("Database connection error");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const user = users.find(u => u.username === userId && u.dob === dob);
-    if (user) {
-      setView('change');
-    } else {
-      setError("Verification failed. User ID and Date of Birth do not match.");
+    setIsProcessing(true);
+
+    try {
+      const { data, error: dbError } = await supabase
+        .from('users_table')
+        .select('*')
+        .eq('username', userId)
+        .eq('dob', dob)
+        .single();
+
+      if (dbError || !data) {
+        setError("Verification failed. User ID and Date of Birth do not match.");
+      } else {
+        setView('change');
+      }
+    } catch (err) {
+      setError("Verification error");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleOldPasswordChangeSubmit = (e: React.FormEvent) => {
+  const handleOldPasswordChangeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const user = users.find(u => u.username === userId && u.password === oldPassword);
-    if (!user) {
-      setError("Verification failed. Incorrect User ID or Old Password.");
-      return;
-    }
+    
     if (newPassword !== verifyPassword) {
       setError("New passwords do not match.");
       return;
@@ -58,15 +86,30 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
       setError("Password must be at least 6 characters.");
       return;
     }
-    
-    alert("Password updated successfully! Please login with your new credentials.");
-    setView('login');
-    setOldPassword('');
-    setNewPassword('');
-    setVerifyPassword('');
+
+    setIsProcessing(true);
+    try {
+      const { data, error: dbError } = await supabase
+        .from('users_table')
+        .update({ password: newPassword })
+        .eq('username', userId)
+        .eq('password', oldPassword)
+        .select();
+
+      if (dbError || !data || data.length === 0) {
+        setError("Verification failed. Incorrect User ID or Old Password.");
+      } else {
+        alert("Password updated successfully! Please login with your new credentials.");
+        setView('login');
+      }
+    } catch (err) {
+      setError("Update failed");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (newPassword !== verifyPassword) {
@@ -77,8 +120,25 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
       setError("Password must be at least 6 characters.");
       return;
     }
-    alert("Password updated successfully! Please login with your new password.");
-    setView('login');
+
+    setIsProcessing(true);
+    try {
+      const { error: dbError } = await supabase
+        .from('users_table')
+        .update({ password: newPassword })
+        .eq('username', userId);
+
+      if (dbError) {
+        setError("Update failed");
+      } else {
+        alert("Password updated successfully! Please login with your new password.");
+        setView('login');
+      }
+    } catch (err) {
+      setError("System error");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const resetForm = (newView: typeof view) => {
@@ -91,9 +151,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
 
   if (!isOpen) return null;
 
-  // Centralized high-contrast input styles
-  const inputClasses = "w-full pl-10 pr-4 py-3 rounded-xl bg-teal-950 border border-teal-800 outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-teal-400 font-medium transition-all shadow-inner";
-  const standardInputClasses = "w-full px-4 py-3 rounded-xl bg-teal-950 border border-teal-800 outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-teal-400 font-medium transition-all shadow-inner";
+  const inputClasses = "w-full pl-10 pr-4 py-3 rounded-xl bg-teal-950 border border-teal-800 outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-teal-400 font-medium transition-all shadow-inner disabled:opacity-50";
+  const standardInputClasses = "w-full px-4 py-3 rounded-xl bg-teal-950 border border-teal-800 outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-teal-400 font-medium transition-all shadow-inner disabled:opacity-50";
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -133,6 +192,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                   <input 
                     type="text" required
+                    disabled={isProcessing}
                     className={inputClasses}
                     placeholder="Enter Username"
                     value={userId}
@@ -146,6 +206,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                   <input 
                     type="password" required
+                    disabled={isProcessing}
                     className={inputClasses}
                     placeholder="••••••••"
                     value={password}
@@ -155,9 +216,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
               </div>
               <button 
                 type="submit"
-                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-[0.2em] rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95 border border-white/5"
+                disabled={isProcessing}
+                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-[0.2em] rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95 border border-white/5 disabled:bg-teal-900/50"
               >
-                Authenticate Session
+                {isProcessing ? 'Verifying...' : 'Authenticate Session'}
               </button>
               <div className="flex flex-col gap-3 pt-2">
                 <button 
@@ -182,6 +244,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm Identity ID</label>
                 <input 
                   type="text" required
+                  disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="Username"
                   value={userId}
@@ -194,6 +257,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                    <input 
                     type="date" required
+                    disabled={isProcessing}
                     className={inputClasses}
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
@@ -202,9 +266,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
               </div>
               <button 
                 type="submit"
-                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95"
+                disabled={isProcessing}
+                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95 disabled:bg-teal-900/50"
               >
-                Verify & Proceed
+                {isProcessing ? 'Verifying...' : 'Verify & Proceed'}
               </button>
               <button 
                 type="button"
@@ -220,6 +285,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">User ID</label>
                 <input 
                   type="text" required
+                  disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="Username"
                   value={userId}
@@ -230,6 +296,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Current Password</label>
                 <input 
                   type="password" required
+                  disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="••••••••"
                   value={oldPassword}
@@ -240,6 +307,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Access Key</label>
                 <input 
                   type="password" required
+                  disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="Min. 6 chars"
                   value={newPassword}
@@ -250,6 +318,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Verify Key</label>
                 <input 
                   type="password" required
+                  disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="Repeat new key"
                   value={verifyPassword}
@@ -258,9 +327,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
               </div>
               <button 
                 type="submit"
-                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl mt-2 transition-all active:scale-95"
+                disabled={isProcessing}
+                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl mt-2 transition-all active:scale-95 disabled:bg-teal-900/50"
               >
-                Update Key
+                {isProcessing ? 'Updating...' : 'Update Key'}
               </button>
               <button 
                 type="button"
@@ -276,6 +346,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Access Key</label>
                 <input 
                   type="password" required
+                  disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="Min. 6 chars"
                   value={newPassword}
@@ -286,6 +357,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm Access Key</label>
                 <input 
                   type="password" required
+                  disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="••••••••"
                   value={verifyPassword}
@@ -294,25 +366,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
               </div>
               <button 
                 type="submit"
-                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95"
+                disabled={isProcessing}
+                className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95 disabled:bg-teal-900/50"
               >
-                Change Key
+                {isProcessing ? 'Saving...' : 'Change Key'}
               </button>
             </form>
           )}
         </div>
       </div>
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-4px); }
-          50% { transform: translateX(4px); }
-          75% { transform: translateX(-4px); }
-        }
-        .animate-shake {
-          animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
-        }
-      `}</style>
     </div>
   );
 };

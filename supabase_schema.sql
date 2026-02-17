@@ -2,7 +2,7 @@
 -- 1. EXTENSIONS
 create extension if not exists "uuid-ossp";
 
--- 2. TABLES (Optimized Order)
+-- 2. TABLES (Ordered by dependency)
 
 -- Courses
 create table if not exists public.courses (
@@ -20,7 +20,7 @@ create table if not exists public.courses (
   created_at timestamp with time zone default now()
 );
 
--- Admission Forms (Inbound Applications)
+-- Admission Forms (Initial Applications)
 create table if not exists public.admission_forms (
   id uuid primary key default uuid_generate_v4(),
   first_name text not null,
@@ -43,23 +43,23 @@ create table if not exists public.admission_forms (
   created_at timestamp with time zone default now()
 );
 
--- Admission Withdrawal (Permanent Student Register)
+-- Admission Withdrawal (The Permanent Student Register)
 create table if not exists public.admission_withdrawal (
   id uuid primary key default uuid_generate_v4(),
   admission_id uuid references public.admission_forms(id) on delete set null,
-  enrollment_serial serial, -- Provides the XXXX part
-  reg_number text unique,   -- Calculated as AKTVI-XXXX-YYYY
+  enrollment_serial serial, 
+  reg_number text unique,   
   student_name text not null,
   cnic text not null,
   course_id uuid references public.courses(id) on delete set null,
   admission_date timestamp with time zone default now(),
   withdrawal_date timestamp with time zone,
-  -- Status as requested: Approved, Suspended, Active, Certified, Rusticated
+  -- Status: Approved, Suspended, Active, Certified, Rusticated
   status text default 'Active' check (status in ('Approved', 'Suspended', 'Active', 'Certified', 'Rusticated')),
   remarks text
 );
 
--- Logic for auto-generating AKTVI-XXXX-YYYY
+-- Function for auto-generating AKTVI-XXXX-YYYY
 create or replace function public.generate_reg_number()
 returns trigger as $$
 begin
@@ -80,43 +80,165 @@ create table if not exists public.users_table (
   last_name text,
   password text not null, 
   dob date,
-  role text check (role in ('admin', 'student', 'instructor')),
+  role text check (role in ('admin', 'student', 'instructor')) default 'student',
   email text,
-  reg_number text, -- links to admission_withdrawal.reg_number
+  reg_number text, -- Matches admission_withdrawal.reg_number
   points integer default 0,
   badges text[] default '{}',
   created_at timestamp with time zone default now()
 );
 
--- 3. RLS & POLICIES
-
--- Enable RLS
-alter table public.courses enable row level security;
-alter table public.admission_forms enable row level security;
-alter table public.admission_withdrawal enable row level security;
-alter table public.users_table enable row level security;
-
--- Course Policies
-create policy "Courses are viewable by everyone" on public.courses for select using (true);
-create policy "Admins can manage courses" on public.courses for all using (
-  exists (select 1 from public.users_table where id = auth.uid() and role = 'admin')
+-- Faculty
+create table if not exists public.instructors (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users_table(id) on delete cascade,
+  name text not null,
+  qualification text,
+  subject text,
+  class_assignment text,
+  image text,
+  created_at timestamp with time zone default now()
 );
 
--- Admission Form Policies
-create policy "Anyone can submit an admission form" on public.admission_forms for insert with check (true);
-create policy "Admins and Instructors can view forms" on public.admission_forms for select using (true); -- Simplified for public view, restrict in production
+-- Academic Performance
+create table if not exists public.exam_results (
+  id uuid primary key default uuid_generate_v4(),
+  student_id text not null, -- Can be Reg# or Admission ID
+  exam_type text check (exam_type in ('1st Term', '2nd Term', 'Final Exam', 'Board Exam')),
+  paper_total integer default 100,
+  paper_obtained integer default 0,
+  practical_total integer default 50,
+  practical_obtained integer default 0,
+  assignment_total integer default 25,
+  assignment_obtained integer default 0,
+  position text,
+  remarks text,
+  date_published timestamp with time zone default now()
+);
 
--- Permanent Register Policies
-create policy "Register is viewable by staff" on public.admission_withdrawal for select using (true);
-create policy "Admins can manage register" on public.admission_withdrawal for all using (true);
+-- Presence Tracking
+create table if not exists public.attendance_records (
+  id uuid primary key default uuid_generate_v4(),
+  student_id text not null,
+  course_id uuid references public.courses(id) on delete cascade,
+  date date default current_date,
+  status text check (status in ('Present', 'Absent', 'Late', 'Excused')),
+  remarks text
+);
 
--- Storage Policies for "web data" bucket
--- Note: Replace 'web data' with bucket name in dashboard
-create policy "Public Read Access" on storage.objects for select using ( bucket_id = 'web data' );
-create policy "Public Upload Access" on storage.objects for insert with check ( bucket_id = 'web data' );
+-- Institutional Announcements
+create table if not exists public.news_alerts (
+  id uuid primary key default uuid_generate_v4(),
+  category text check (category in ('Admission', 'Result', 'Schedule', 'Urgent')),
+  title text not null,
+  content text,
+  action_text text,
+  action_page text,
+  expires_at timestamp with time zone,
+  priority text check (priority in ('Normal', 'High'))
+);
+
+-- Sales Catalog
+create table if not exists public.products (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  price text,
+  image text,
+  slogan text,
+  description text,
+  created_at timestamp with time zone default now()
+);
+
+-- LMS: Quizzes
+create table if not exists public.quizzes (
+  id uuid primary key default uuid_generate_v4(),
+  course_id uuid references public.courses(id) on delete cascade,
+  title text not null,
+  created_at timestamp with time zone default now()
+);
+
+-- LMS: Quiz Questions
+create table if not exists public.quiz_questions (
+  id uuid primary key default uuid_generate_v4(),
+  quiz_id uuid references public.quizzes(id) on delete cascade,
+  question text not null,
+  options text[] not null,
+  correct_index integer not null
+);
+
+-- LMS: Discussion Forum
+create table if not exists public.discussion_posts (
+  id uuid primary key default uuid_generate_v4(),
+  course_id uuid references public.courses(id) on delete cascade,
+  user_id uuid references public.users_table(id),
+  user_name text,
+  user_role text,
+  title text not null,
+  content text,
+  timestamp timestamp with time zone default now()
+);
+
+create table if not exists public.discussion_replies (
+  id uuid primary key default uuid_generate_v4(),
+  post_id uuid references public.discussion_posts(id) on delete cascade,
+  user_id uuid references public.users_table(id),
+  user_name text,
+  content text,
+  timestamp timestamp with time zone default now()
+);
+
+-- 3. RLS POLICIES (Security Logic)
+
+-- Enable RLS for all sensitive tables
+alter table public.users_table enable row level security;
+alter table public.admission_forms enable row level security;
+alter table public.admission_withdrawal enable row level security;
+alter table public.exam_results enable row level security;
+alter table public.attendance_records enable row level security;
+
+-- Public Access
+create policy "Courses are public" on public.courses for select using (true);
+create policy "Products are public" on public.products for select using (true);
+create policy "News is public" on public.news_alerts for select using (true);
+
+-- Enable selecting users for the purpose of verifying login credentials
+create policy "Allow select for login" on public.users_table for select using (true);
+
+-- Admission Form: Anyone can submit, only staff can read
+create policy "Public can submit forms" on public.admission_forms for insert with check (true);
+create policy "Staff can view forms" on public.admission_forms for select using (
+  exists (select 1 from public.users_table where id = auth.uid() and role in ('admin', 'instructor'))
+);
+
+-- Permanent Register: High security
+create policy "Admins have full access to register" on public.admission_withdrawal for all using (
+  exists (select 1 from public.users_table where id = auth.uid() and role = 'admin')
+);
+create policy "Students can view their own register status" on public.admission_withdrawal for select using (
+  cnic = (select cnic from public.users_table where id = auth.uid())
+);
+
+-- Results: Only student and staff
+create policy "Students can view their own results" on public.exam_results for select using (
+  student_id = (select reg_number from public.users_table where id = auth.uid())
+);
+create policy "Staff can manage results" on public.exam_results for all using (
+  exists (select 1 from public.users_table where id = auth.uid() and role in ('admin', 'instructor'))
+);
+
+-- Discussion: Participants of course can view
+create policy "Course participants can view posts" on public.discussion_posts for select using (true);
+create policy "Auth users can post" on public.discussion_posts for insert with check (auth.uid() is not null);
 
 -- 4. SEED DATA
-insert into public.courses (name, duration, status, mode, category)
+
+-- Default Admin User
+insert into public.users_table (username, first_name, last_name, password, dob, role)
+values ('admin', 'System', 'Administrator', 'admin123', '1990-01-01', 'admin')
+on conflict (username) do nothing;
+
+-- Sample Courses
+insert into public.courses (name, duration, status, mode, category, description)
 values 
-('Fashion Designing', '6 Months', 'Active', 'ON CAMPUS', 'Vocational'),
-('Digital Marketing', '3 Months', 'Active', 'ONLINE', 'Technical');
+('Fashion Designing', '6 Months', 'Active', 'ON CAMPUS', 'Vocational', 'Comprehensive fashion and tailoring program.'),
+('Digital Marketing', '3 Months', 'Active', 'ONLINE', 'Technical', 'Modern marketing strategies and tools.');

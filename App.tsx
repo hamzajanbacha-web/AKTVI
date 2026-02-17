@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { getDB, saveDB } from './db';
+import { getDB, saveDB, mapUser, mapAdmission } from './db';
 import { Course, Product, AdmissionForm, User, Instructor, ExamResult, SessionSchedule, NewsAlert, UserProgress, AttendanceRecord, Quiz, DiscussionPost, AdmissionWithdrawal } from './types';
 import Navbar from './components/Navbar';
 import NotificationTicker from './components/NotificationTicker';
@@ -123,7 +123,7 @@ const App: React.FC = () => {
     relation: form.relation,
     address: form.address,
     email: form.email,
-    course_id: form.courseId,
+    course_id: form.courseId || null, // Ensure empty string becomes NULL for foreign key
     photo: form.photo,
     status: 'Pending',
     is_draft: form.isDraft
@@ -134,7 +134,7 @@ const App: React.FC = () => {
     const { error } = await supabase.from('admission_forms').insert(dbPayload);
     if (error) {
       console.error("Submission error:", error);
-      alert("Registration failed. Please verify your details.");
+      alert(`Registration failed: ${error.message}`);
     } else {
       alert("Application submitted successfully!");
       refreshData();
