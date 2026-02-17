@@ -1,0 +1,8 @@
+{
+  "name": "Akbar Khan Technical and Vocational Institute",
+  "description": "A high-quality technical education platform for underprivileged women, offering courses in Fashion Designing, Beautician, Digital Marketing, and more.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
