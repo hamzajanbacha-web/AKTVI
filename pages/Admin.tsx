@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Course, AdmissionForm, CourseStatus, Instructor, User, ExamResult, ExamType, AttendanceRecord, AttendanceStatus, SessionSchedule, ScheduleStatus, NewsAlert, AlertCategory, UserProgress } from '../types';
+import { Course, AdmissionForm, CourseStatus, Instructor, User, ExamResult, ExamType, AttendanceRecord, AttendanceStatus, SessionSchedule, ScheduleStatus, NewsAlert, AlertCategory, UserProgress, DiscussionPost } from '../types';
 import { Settings, Plus, Edit2, Trash2, CheckCircle, XCircle, Users, BookOpen, Clock, Layout, UserPlus, Shield, ClipboardList, Search, Calendar, Filter, PieChart, Info, Play, Activity, Megaphone, BellRing, BarChart3, TrendingUp, MessageSquare, UserCircle, Save, LogOut, Heart, Globe, ArrowLeft, X } from 'lucide-react';
 import { getDB, saveDB, getNextId } from '../db';
 
@@ -12,6 +12,10 @@ interface AdminProps {
   results: ExamResult[];
   schedules: SessionSchedule[];
   alerts: NewsAlert[];
+  // Fix: Added missing data props to avoid synchronous DB calls
+  progress: UserProgress[];
+  attendance: AttendanceRecord[];
+  discussions: DiscussionPost[];
   onUpdateCourse: (course: Course) => void;
   onRemoveCourse: (id: string) => void;
   onAddCourse: (course: Course) => void;
@@ -28,6 +32,7 @@ interface AdminProps {
 
 const Admin: React.FC<AdminProps> = ({ 
   courses, admissions, instructors, users, results, schedules, alerts,
+  progress, attendance, discussions,
   onUpdateCourse, onRemoveCourse, onAddCourse, onUpdateAdmission,
   onAddInstructor, onUpdateInstructor, onRemoveInstructor, onAddResult, onRemoveResult,
   onUpdateSchedules, onUpdateAlerts, onPageChange
@@ -41,9 +46,9 @@ const Admin: React.FC<AdminProps> = ({
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [editingFaculty, setEditingFaculty] = useState<{instructor: Instructor, user: User} | null>(null);
 
-  const db = getDB();
-  const progressLogs: UserProgress[] = db.progress;
-  const attendanceLogs: AttendanceRecord[] = db.attendance;
+  // Fix: Removed incorrect synchronous call to getDB (which is async)
+  const progressLogs: UserProgress[] = progress;
+  const attendanceLogs: AttendanceRecord[] = attendance;
 
   const [courseForm, setCourseForm] = useState<Partial<Course>>({ name: '', instructorName: '', duration: '', status: 'Active', mode: 'ON CAMPUS', content: '', description: '', thumbnail: 'https://picsum.photos/seed/course/800/600', instructorImage: 'https://picsum.photos/seed/inst/200/200' });
   const [facultyForm, setFacultyForm] = useState({ name: '', qualification: '', subject: '', classAssignment: '', image: 'https://picsum.photos/seed/faculty/200/200', username: '', password: '', dob: '1990-01-01' });
@@ -128,7 +133,7 @@ const Admin: React.FC<AdminProps> = ({
                 { label: 'Active Students', value: admissions.filter(a => a.status === 'Approved').length, icon: <Users className="text-teal-600" /> },
                 { label: 'Avg Progress', value: '68%', icon: <BarChart3 className="text-blue-600" /> },
                 { label: 'Quiz Submissions', value: progressLogs.reduce((acc, p) => acc + (p.quizScores?.length || 0), 0), icon: <ClipboardList className="text-purple-600" /> },
-                { label: 'Forum Topics', value: db.discussions.length, icon: <MessageSquare className="text-emerald-600" /> }
+                { label: 'Forum Topics', value: discussions.length, icon: <MessageSquare className="text-emerald-600" /> }
               ].map((stat, i) => (
                 <div key={i} className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-teal-50 shadow-sm">
                    <div className="flex justify-between items-start mb-4">

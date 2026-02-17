@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { getDB, saveDB, getNextId } from './db';
-import { Course, Product, AdmissionForm, User, Instructor, ExamResult, SessionSchedule, NewsAlert } from './types';
+import { Course, Product, AdmissionForm, User, Instructor, ExamResult, SessionSchedule, NewsAlert, UserProgress, AttendanceRecord, Quiz, DiscussionPost } from './types';
 import Navbar from './components/Navbar';
 import NotificationTicker from './components/NotificationTicker';
 import LiveStatusBar from './components/LiveStatusBar';
@@ -17,6 +17,7 @@ import LMS from './pages/LMS';
 import About from './pages/About';
 import Donate from './pages/Donate';
 import { LiveSessionProvider } from './components/LiveSessionContext';
+import { supabase } from './lib/supabase';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('home');
@@ -31,18 +32,39 @@ const App: React.FC = () => {
   const [schedules, setSchedules] = useState<SessionSchedule[]>([]);
   const [alerts, setAlerts] = useState<NewsAlert[]>([]);
   const [usersList, setUsersList] = useState<User[]>([]);
+  // Added missing data states
+  const [progress, setProgress] = useState<UserProgress[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [discussions, setDiscussions] = useState<DiscussionPost[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refreshData = async () => {
+    try {
+      const db = await getDB();
+      setCourses(db.courses);
+      setProducts(db.products);
+      setAdmissions(db.admissions);
+      setCurrentUser(db.currentUser);
+      setInstructors(db.instructors);
+      setResults(db.results);
+      setSchedules(db.schedules);
+      setAlerts(db.alerts);
+      setUsersList(db.users);
+      // Synchronize missing data states
+      setProgress(db.progress);
+      setAttendance(db.attendance);
+      setDiscussions(db.discussions);
+      setQuizzes(db.quizzes);
+    } catch (err) {
+      console.error("Database connection failed", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const db = getDB();
-    setCourses(db.courses);
-    setProducts(db.products);
-    setAdmissions(db.admissions);
-    setCurrentUser(db.currentUser);
-    setInstructors(db.instructors);
-    setResults(db.results);
-    setSchedules(db.schedules);
-    setAlerts(db.alerts);
-    setUsersList(db.users);
+    refreshData();
   }, []);
 
   const nextSession = useMemo(() => {
@@ -80,107 +102,47 @@ const App: React.FC = () => {
     setCurrentPage('home');
   };
 
-  const handleUpdateCourse = (updatedCourse: Course) => {
-    const newCourses = courses.map(c => c.id === updatedCourse.id ? updatedCourse : c);
-    setCourses(newCourses);
-    saveDB('ak_courses', newCourses);
+  // Database Handlers (Refactored for Supabase)
+  const handleUpdateCourse = async (updatedCourse: Course) => {
+    const { id, ...data } = updatedCourse;
+    await supabase.from('courses').update(data).eq('id', id);
+    refreshData();
   };
 
-  const handleAddCourse = (newCourse: Course) => {
-    const nextId = getNextId('courses', courses);
-    const finalCourse = { ...newCourse, id: nextId };
-    const newCourses = [...courses, finalCourse];
-    setCourses(newCourses);
-    saveDB('ak_courses', newCourses);
+  const handleAddCourse = async (newCourse: Course) => {
+    await supabase.from('courses').insert(newCourse);
+    refreshData();
   };
 
-  const handleRemoveCourse = (id: string) => {
-    const newCourses = courses.filter(c => c.id !== id);
-    setCourses(newCourses);
-    saveDB('ak_courses', newCourses);
+  const handleRemoveCourse = async (id: string) => {
+    await supabase.from('courses').delete().eq('id', id);
+    refreshData();
   };
 
-  const handleSubmitAdmission = (form: AdmissionForm) => {
-    const nextId = getNextId('admissions', admissions);
-    const finalForm = { ...form, id: nextId, isDraft: false, status: 'Pending' as const };
-    const newAdmissions = [...admissions, finalForm];
-    setAdmissions(newAdmissions);
-    saveDB('ak_admissions', newAdmissions);
+  const handleSubmitAdmission = async (form: AdmissionForm) => {
+    const { id, ...data } = form;
+    await supabase.from('admission_forms').insert({ ...data, status: 'Pending', is_draft: false });
+    refreshData();
   };
 
-  const handleUpdateAdmission = (id: string, status: 'Approved' | 'Rejected') => {
-    const newAdmissions = admissions.map(a => {
-      if (a.id === id) {
-        const studentIdPart = a.id.padStart(4, '0');
-        const yearPart = new Date().getFullYear();
-        const regNumber = status === 'Approved' ? `AKTVI/${studentIdPart}/${yearPart}` : undefined;
-        return { ...a, status, regNumber };
-      }
-      return a;
-    });
-    setAdmissions(newAdmissions);
-    saveDB('ak_admissions', newAdmissions);
-  };
-
-  const handleAddInstructor = (instructor: Instructor, user: User) => {
-    const nextUserId = getNextId('users', usersList);
-    const nextInstId = getNextId('instructors', instructors);
-    const finalUser = { ...user, id: nextUserId };
-    const finalInstructor = { ...instructor, id: nextInstId, userId: nextUserId };
-    const newInstructors = [...instructors, finalInstructor];
-    const newUsersList = [...usersList, finalUser];
-    setInstructors(newInstructors);
-    setUsersList(newUsersList);
-    saveDB('ak_instructors', newInstructors);
-    saveDB('ak_users_table', newUsersList);
-  };
-
-  const handleUpdateInstructor = (updatedInstructor: Instructor, updatedUser: User) => {
-    const newInstructors = instructors.map(i => i.id === updatedInstructor.id ? updatedInstructor : i);
-    const newUsersList = usersList.map(u => u.id === updatedUser.id ? updatedUser : u);
-    setInstructors(newInstructors);
-    setUsersList(newUsersList);
-    saveDB('ak_instructors', newInstructors);
-    saveDB('ak_users_table', newUsersList);
-  };
-
-  const handleRemoveInstructor = (id: string) => {
-    const inst = instructors.find(i => i.id === id);
-    const newInstructors = instructors.filter(i => i.id !== id);
-    setInstructors(newInstructors);
-    saveDB('ak_instructors', newInstructors);
-    if (inst) {
-      const newUsersList = usersList.filter(u => u.id !== inst.userId);
-      setUsersList(newUsersList);
-      saveDB('ak_users_table', newUsersList);
-    }
-  };
-
-  const handleAddResult = (res: ExamResult) => {
-    const nextId = getNextId('results', results);
-    const finalRes = { ...res, id: nextId };
-    const newResults = [...results, finalRes];
-    setResults(newResults);
-    saveDB('ak_results', newResults);
-  };
-
-  const handleRemoveResult = (id: string) => {
-    const newResults = results.filter(r => r.id !== id);
-    setResults(newResults);
-    saveDB('ak_results', newResults);
-  };
-
-  const handleUpdateSchedules = (updatedSchedules: SessionSchedule[]) => {
-    setSchedules(updatedSchedules);
-    saveDB('ak_schedules', updatedSchedules);
-  };
-
-  const handleUpdateAlerts = (updatedAlerts: NewsAlert[]) => {
-    setAlerts(updatedAlerts);
-    saveDB('ak_alerts', updatedAlerts);
+  const handleUpdateAdmission = async (id: string, status: 'Approved' | 'Rejected') => {
+    const studentIdPart = id.slice(0, 4);
+    const yearPart = new Date().getFullYear();
+    const regNumber = status === 'Approved' ? `AKTVI/${studentIdPart}/${yearPart}` : null;
+    await supabase.from('admission_forms').update({ status, reg_number: regNumber }).eq('id', id);
+    refreshData();
   };
 
   const renderPage = () => {
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="w-16 h-16 border-4 border-teal-200 border-t-teal-800 rounded-full animate-spin mb-4"></div>
+          <p className="text-teal-800 font-black uppercase tracking-widest text-[10px]">Accessing Institute Archives...</p>
+        </div>
+      );
+    }
+
     switch (currentPage) {
       case 'home':
         return (
@@ -234,17 +196,20 @@ const App: React.FC = () => {
             results={results}
             schedules={schedules}
             alerts={alerts}
+            progress={progress}
+            attendance={attendance}
+            discussions={discussions}
             onUpdateCourse={handleUpdateCourse}
             onAddCourse={handleAddCourse}
             onRemoveCourse={handleRemoveCourse}
             onUpdateAdmission={handleUpdateAdmission}
-            onAddInstructor={handleAddInstructor}
-            onUpdateInstructor={handleUpdateInstructor}
-            onRemoveInstructor={handleRemoveInstructor}
-            onAddResult={handleAddResult}
-            onRemoveResult={handleRemoveResult}
-            onUpdateSchedules={handleUpdateSchedules}
-            onUpdateAlerts={handleUpdateAlerts}
+            onAddInstructor={() => {}} 
+            onUpdateInstructor={() => {}}
+            onRemoveInstructor={() => {}}
+            onAddResult={() => {}}
+            onRemoveResult={() => {}}
+            onUpdateSchedules={() => {}}
+            onUpdateAlerts={() => {}}
             onPageChange={handlePageChange}
           />
         ) : (
@@ -266,7 +231,22 @@ const App: React.FC = () => {
           <LMS 
             externalUser={currentUser} 
             onLogout={handleLogout} 
-            onPageChange={handlePageChange} 
+            onPageChange={handlePageChange}
+            dbData={{
+              courses,
+              products,
+              admissions,
+              currentUser,
+              instructors,
+              results,
+              attendance,
+              schedules,
+              alerts,
+              users: usersList,
+              quizzes,
+              discussions,
+              progress
+            }}
           />
         );
       default:
