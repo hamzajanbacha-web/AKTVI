@@ -14,12 +14,12 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }) => {
   const [view, setView] = useState<'login' | 'forgot' | 'change' | 'change-old'>('login');
-  const [userId, setUserId] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
   const [dob, setDob] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [verifyPassword, setVerifyPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -29,21 +29,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
     setIsProcessing(true);
 
     try {
-      // Query database directly for the user
+      // Direct query to users_table for credentials verification
       const { data, error: dbError } = await supabase
         .from('users_table')
         .select('*')
-        .eq('username', userId)
+        .eq('username', username)
         .eq('password', password)
-        .single();
+        .maybeSingle(); // maybeSingle handles 0 or 1 results gracefully
 
-      if (dbError || !data) {
-        setError("Invalid username or password");
+      if (dbError) {
+        console.error("Database Login Error:", dbError);
+        setError("System error. Please try again later.");
+      } else if (!data) {
+        setError("Invalid username or password.");
       } else {
         onLogin(mapUser(data));
       }
     } catch (err) {
-      setError("Database connection error");
+      setError("Unable to connect to the authentication server.");
     } finally {
       setIsProcessing(false);
     }
@@ -58,17 +61,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
       const { data, error: dbError } = await supabase
         .from('users_table')
         .select('*')
-        .eq('username', userId)
+        .eq('username', username)
         .eq('dob', dob)
-        .single();
+        .maybeSingle();
 
       if (dbError || !data) {
-        setError("Verification failed. User ID and Date of Birth do not match.");
+        setError("Verification failed. Username and Date of Birth do not match.");
       } else {
         setView('change');
       }
     } catch (err) {
-      setError("Verification error");
+      setError("Verification error.");
     } finally {
       setIsProcessing(false);
     }
@@ -78,8 +81,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
     e.preventDefault();
     setError(null);
     
-    if (newPassword !== verifyPassword) {
-      setError("New passwords do not match.");
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
     if (newPassword.length < 6) {
@@ -92,18 +95,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
       const { data, error: dbError } = await supabase
         .from('users_table')
         .update({ password: newPassword })
-        .eq('username', userId)
+        .eq('username', username)
         .eq('password', oldPassword)
         .select();
 
       if (dbError || !data || data.length === 0) {
-        setError("Verification failed. Incorrect User ID or Old Password.");
+        setError("Incorrect username or current password.");
       } else {
         alert("Password updated successfully! Please login with your new credentials.");
-        setView('login');
+        resetForm('login');
       }
     } catch (err) {
-      setError("Update failed");
+      setError("Password update failed.");
     } finally {
       setIsProcessing(false);
     }
@@ -112,7 +115,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (newPassword !== verifyPassword) {
+    if (newPassword !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
@@ -126,16 +129,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
       const { error: dbError } = await supabase
         .from('users_table')
         .update({ password: newPassword })
-        .eq('username', userId);
+        .eq('username', username);
 
       if (dbError) {
-        setError("Update failed");
+        setError("Unable to change password. Contact administrator.");
       } else {
         alert("Password updated successfully! Please login with your new password.");
-        setView('login');
+        resetForm('login');
       }
     } catch (err) {
-      setError("System error");
+      setError("System error during password change.");
     } finally {
       setIsProcessing(false);
     }
@@ -144,7 +147,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
   const resetForm = (newView: typeof view) => {
     setView(newView);
     setNewPassword('');
-    setVerifyPassword('');
+    setConfirmPassword('');
     setOldPassword('');
     setError(null);
   };
@@ -159,20 +162,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose}></div>
       <div className="relative bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-scaleIn">
         <div className="bg-teal-700 p-8 text-white relative">
-          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20">
+          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
             <X className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-3 mb-2">
             <ShieldCheck className="w-6 h-6 text-teal-200" />
             <h2 className="text-2xl font-bold uppercase tracking-tight">
-              {view === 'login' && 'Portal Entry'}
-              {view === 'forgot' && 'Reset Access'}
-              {view === 'change' && 'New Credential'}
-              {view === 'change-old' && 'Update Cipher'}
+              {view === 'login' && 'Portal Login'}
+              {view === 'forgot' && 'Reset Password'}
+              {view === 'change' && 'New Password'}
+              {view === 'change-old' && 'Update Password'}
             </h2>
           </div>
           <p className="text-teal-100 text-xs font-bold uppercase tracking-widest opacity-80">
-            Institutional Authentication Layer
+            Institutional Access Control
           </p>
         </div>
 
@@ -187,7 +190,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
           {view === 'login' ? (
             <form onSubmit={handleLoginSubmit} className="space-y-6">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Credential ID</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Username</label>
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                   <input 
@@ -195,20 +198,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                     disabled={isProcessing}
                     className={inputClasses}
                     placeholder="Enter Username"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Access Key</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                   <input 
                     type="password" required
                     disabled={isProcessing}
                     className={inputClasses}
-                    placeholder="••••••••"
+                    placeholder="Enter Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -219,7 +222,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 disabled={isProcessing}
                 className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-[0.2em] rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95 border border-white/5 disabled:bg-teal-900/50"
               >
-                {isProcessing ? 'Verifying...' : 'Authenticate Session'}
+                {isProcessing ? 'Verifying...' : 'Sign In'}
               </button>
               <div className="flex flex-col gap-3 pt-2">
                 <button 
@@ -227,28 +230,28 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                   onClick={() => resetForm('forgot')}
                   className="text-center text-[10px] font-black text-teal-600 uppercase tracking-widest hover:text-teal-800"
                 >
-                  Forgot Key? (Verify via DOB)
+                  Forgot Password?
                 </button>
                 <button 
                   type="button"
                   onClick={() => resetForm('change-old')}
                   className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-teal-600 flex items-center justify-center gap-2"
                 >
-                  <KeyRound className="w-3.5 h-3.5" /> Rotate Password
+                  <KeyRound className="w-3.5 h-3.5" /> Change Password
                 </button>
               </div>
             </form>
           ) : view === 'forgot' ? (
             <form onSubmit={handleForgotSubmit} className="space-y-6">
                <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm Identity ID</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Account Username</label>
                 <input 
                   type="text" required
                   disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="Username"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -269,27 +272,27 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 disabled={isProcessing}
                 className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95 disabled:bg-teal-900/50"
               >
-                {isProcessing ? 'Verifying...' : 'Verify & Proceed'}
+                {isProcessing ? 'Verifying...' : 'Verify Identity'}
               </button>
               <button 
                 type="button"
                 onClick={() => setView('login')}
                 className="w-full text-center text-[10px] font-black text-slate-400 hover:text-teal-600 uppercase tracking-widest flex items-center justify-center gap-2"
               >
-                <ArrowLeft className="w-4 h-4" /> Return to Entry
+                <ArrowLeft className="w-4 h-4" /> Back to Login
               </button>
             </form>
           ) : view === 'change-old' ? (
             <form onSubmit={handleOldPasswordChangeSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">User ID</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Username</label>
                 <input 
                   type="text" required
                   disabled={isProcessing}
                   className={standardInputClasses}
                   placeholder="Username"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -298,31 +301,31 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                   type="password" required
                   disabled={isProcessing}
                   className={standardInputClasses}
-                  placeholder="••••••••"
+                  placeholder="Current Password"
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Access Key</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
                   className={standardInputClasses}
-                  placeholder="Min. 6 chars"
+                  placeholder="Min. 6 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Verify Key</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm New Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
                   className={standardInputClasses}
-                  placeholder="Repeat new key"
-                  value={verifyPassword}
-                  onChange={(e) => setVerifyPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
               <button 
@@ -330,38 +333,38 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 disabled={isProcessing}
                 className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl mt-2 transition-all active:scale-95 disabled:bg-teal-900/50"
               >
-                {isProcessing ? 'Updating...' : 'Update Key'}
+                {isProcessing ? 'Updating...' : 'Update Password'}
               </button>
               <button 
                 type="button"
                 onClick={() => setView('login')}
                 className="w-full text-center text-[10px] font-black text-slate-400 hover:text-teal-600 uppercase tracking-widest flex items-center justify-center gap-2"
               >
-                <ArrowLeft className="w-4 h-4" /> Return to Entry
+                <ArrowLeft className="w-4 h-4" /> Back to Login
               </button>
             </form>
           ) : (
             <form onSubmit={handleChangePassword} className="space-y-6">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Access Key</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
                   className={standardInputClasses}
-                  placeholder="Min. 6 chars"
+                  placeholder="Min. 6 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm Access Key</label>
+                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
                   className={standardInputClasses}
-                  placeholder="••••••••"
-                  value={verifyPassword}
-                  onChange={(e) => setVerifyPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
               <button 
@@ -369,7 +372,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 disabled={isProcessing}
                 className="w-full py-4 bg-teal-800 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-teal-950 shadow-xl transition-all active:scale-95 disabled:bg-teal-900/50"
               >
-                {isProcessing ? 'Saving...' : 'Change Key'}
+                {isProcessing ? 'Saving...' : 'Reset Password'}
               </button>
             </form>
           )}

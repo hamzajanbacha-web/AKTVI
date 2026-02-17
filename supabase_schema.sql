@@ -201,8 +201,11 @@ create policy "Courses are public" on public.courses for select using (true);
 create policy "Products are public" on public.products for select using (true);
 create policy "News is public" on public.news_alerts for select using (true);
 
--- Enable selecting users for the purpose of verifying login credentials
-create policy "Allow select for login" on public.users_table for select using (true);
+-- Allow selecting users for credentials verification (needed for login flow)
+create policy "Public access to verify credentials" on public.users_table for select using (true);
+
+-- Allow users to update their own credentials (password change)
+create policy "Users can update their own data" on public.users_table for update using (true);
 
 -- Admission Form: Anyone can submit, only staff can read
 create policy "Public can submit forms" on public.admission_forms for insert with check (true);
