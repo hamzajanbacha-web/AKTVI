@@ -1,8 +1,9 @@
 {
   "name": "Akbar Khan Technical and Vocational Institute",
-  "description": "A high-quality technical education platform for underprivileged women, offering courses in Fashion Designing, Beautician, Digital Marketing, and more.",
+  "description": "This website is designed to host the accademic and sales needs of the akbar khan technical and vocational institute.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "display-capture"
   ]
 }

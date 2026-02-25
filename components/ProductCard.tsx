@@ -11,7 +11,7 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, onBuy }) => {
   return (
     <div className="flex-shrink-0 w-72 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-      <div className="h-64 overflow-hidden">
+      <div className="h-96 overflow-hidden">
         <img 
           src={product.image} 
           alt={product.name} 

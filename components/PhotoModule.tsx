@@ -23,6 +23,13 @@ const PhotoModule: React.FC<PhotoModuleProps> = ({ onPhotoSaved, initialPhoto })
     if (initialPhoto && initialPhoto !== photo) {
       setPhoto(initialPhoto);
       setIsSaved(true);
+    } else if (!initialPhoto && photo) {
+      // Clear internal state if form is reset from parent
+      setPhoto(null);
+      setIsSaved(false);
+      setShowSuccess(false);
+      setBrightness(100);
+      setContrast(100);
     }
   }, [initialPhoto]);
 
@@ -115,7 +122,7 @@ const PhotoModule: React.FC<PhotoModuleProps> = ({ onPhotoSaved, initialPhoto })
       
       {/* Identity Card Style Preview Box */}
       <div className="relative w-[140px] h-[180px] bg-white rounded-lg overflow-hidden shadow-lg ring-1 ring-black/5 flex items-center justify-center">
-        {photo ? (
+        {photo && photo !== "" ? (
           <>
             <img 
               src={photo} 

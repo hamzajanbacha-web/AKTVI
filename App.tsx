@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { getDB, saveDB, mapUser, mapAdmission } from './db';
-import { Course, Product, AdmissionForm, User, Instructor, ExamResult, SessionSchedule, NewsAlert, UserProgress, AttendanceRecord, Quiz, DiscussionPost, AdmissionWithdrawal } from './types';
-import Navbar from './components/Navbar';
-import NotificationTicker from './components/NotificationTicker';
+import { getDB, saveDB } from './db';
+import { Course, Product, AdmissionForm, User, Instructor, ExamResult, SessionSchedule, NewsAlert, UserProgress, AttendanceRecord, Quiz, DiscussionPost, AdmissionWithdrawal, AdmissionStatus } from './types';
+import Sidebar from './components/Sidebar';
 import LiveStatusBar from './components/LiveStatusBar';
-import NewsAlertStack from './components/NewsAlertStack';
+import MainNav from './components/MainNav';
+import NotificationTicker from './components/NotificationTicker';
 import AuthModal from './components/AuthModal';
 import CourseCard from './components/CourseCard';
 import Home from './pages/Home';
@@ -16,14 +16,16 @@ import Admin from './pages/Admin';
 import LMS from './pages/LMS';
 import About from './pages/About';
 import Donate from './pages/Donate';
-import { LiveSessionProvider } from './components/LiveSessionContext';
+import { useLiveSession } from './components/LiveSessionContext';
 import { supabase } from './lib/supabase';
-import { Activity, Wifi, WifiOff } from 'lucide-react';
+import { Mail, MapPin, Phone, ShieldCheck, Globe } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('home');
   const [intendedPage, setIntendedPage] = useState<string | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -41,12 +43,19 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'checking'>('checking');
 
+  const { terminateSession } = useLiveSession();
+
   const refreshData = async () => {
     try {
       setDbStatus('checking');
       const db = await getDB();
-      const { data: regData } = await supabase.from('admission_withdrawal').select('*').order('enrollment_serial', { ascending: false });
+      const { data: regData, error: regError } = await supabase
+        .from('admission_withdrawal')
+        .select('*')
+        .order('enrollment_serial', { ascending: false });
       
+      if (regError) console.error("Register sync error:", regError);
+
       setCourses(db.courses);
       setProducts(db.products);
       setAdmissions(db.admissions);
@@ -74,23 +83,44 @@ const App: React.FC = () => {
     refreshData();
   }, []);
 
-  const nextSession = useMemo(() => {
-    const live = schedules.find(s => s.status === 'Live');
+  const activeOrNextSession = useMemo(() => {
+    let baseSchedules = schedules;
+    if (currentUser?.role === 'student' && currentUser.courseId) {
+      baseSchedules = schedules.filter(s => s.courseId === currentUser.courseId);
+    }
+    const live = baseSchedules.find(s => s.status === 'Live');
     if (live) return live;
-    const future = schedules
-      .filter(s => s.status === 'Scheduled' && new Date(s.startTime).getTime() > Date.now())
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    return future.length > 0 ? future[0] : null;
-  }, [schedules]);
+    return baseSchedules
+      .filter(s => s.status === 'Scheduled')
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0] || null;
+  }, [schedules, currentUser]);
+
+  const sessionDisplayName = useMemo(() => {
+    if (!activeOrNextSession) return "Institutional Feed";
+    const course = courses.find(c => c.id === activeOrNextSession.courseId);
+    return course ? course.name : activeOrNextSession.topic;
+  }, [activeOrNextSession, courses]);
 
   const handlePageChange = (page: string) => {
-    if ((page === 'lms' || page === 'admin') && !currentUser) {
+    if ((page === 'admin' || page === 'lms') && !currentUser) {
       setIntendedPage(page);
+      setAuthView('login');
       setIsAuthOpen(true);
     } else {
       setCurrentPage(page);
       window.scrollTo(0, 0);
     }
+    setIsSidebarOpen(false);
+  };
+
+  const handleLoginTrigger = () => {
+    setAuthView('login');
+    setIsAuthOpen(true);
+  };
+
+  const handleSignupTrigger = () => {
+    setAuthView('signup');
+    setIsAuthOpen(true);
   };
 
   const handleLogin = (user: User) => {
@@ -103,237 +133,370 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // If instructor/admin, check for active live session and end it
+    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'instructor')) {
+      const activeSession = schedules.find(s => s.status === 'Live');
+      if (activeSession) {
+        // If admin, we can end any session. If instructor, we end their course session.
+        const shouldEnd = currentUser.role === 'admin' || activeSession.courseId === currentUser.courseId;
+        
+        if (shouldEnd) {
+          try {
+            await supabase
+              .from('session_schedules')
+              .update({ status: 'Completed' })
+              .eq('id', parseInt(activeSession.id));
+            
+            terminateSession();
+          } catch (err) {
+            console.error("Failed to end session on logout", err);
+          }
+        }
+      }
+    }
+
     setCurrentUser(null);
     localStorage.removeItem('ak_user');
     setCurrentPage('home');
+    setIsSidebarOpen(false);
+    refreshData();
   };
 
-  const mapAdmissionToDB = (form: AdmissionForm) => ({
-    first_name: form.firstName,
-    last_name: form.lastName,
-    cnic: form.cnic,
-    dob: form.dob,
-    gender: form.gender,
-    qualification: form.qualification,
-    occupation: form.occupation,
-    guardian_name: form.guardianName,
-    whatsapp: form.whatsapp,
-    guardian_whatsapp: form.guardianWhatsapp,
-    relation: form.relation,
-    address: form.address,
-    email: form.email,
-    course_id: form.courseId || null, // Ensure empty string becomes NULL for foreign key
-    photo: form.photo,
-    status: 'Pending',
-    is_draft: form.isDraft
-  });
-
-  const handleSubmitAdmission = async (form: AdmissionForm) => {
-    const dbPayload = mapAdmissionToDB(form);
-    const { error } = await supabase.from('admission_forms').insert(dbPayload);
-    if (error) {
-      console.error("Submission error:", error);
-      alert(`Registration failed: ${error.message}`);
-    } else {
-      alert("Application submitted successfully!");
-      refreshData();
-    }
+  const handleAddCourse = async (courseData: Partial<Course>) => {
+    const { error } = await supabase.from('courses').insert({
+      name: courseData.name,
+      instructor_name: courseData.instructorName,
+      duration: courseData.duration,
+      status: courseData.status,
+      mode: courseData.mode,
+      description: courseData.description,
+      thumbnail: courseData.thumbnail || 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e'
+    });
+    if (error) alert("Sync Error: " + error.message);
+    else await refreshData();
   };
 
-  const handleUpdateAdmission = async (id: string, status: 'Approved' | 'Rejected') => {
-    const { data: admission, error: fetchError } = await supabase
+  const handleRemoveCourse = async (id: string) => {
+    if (!confirm("Remove this course?")) return;
+    const { error } = await supabase.from('courses').delete().eq('id', id);
+    if (error) alert("Sync Error: " + error.message);
+    else await refreshData();
+  };
+
+  const handleCreateStudentAccount = async (regEntry: any): Promise<any> => {
+    const defaultPassword = 'stu123';
+    const username = regEntry.reg_number.replace(/\//g, '').toLowerCase();
+    const { data: admData, error: admError } = await supabase
       .from('admission_forms')
-      .select('*')
-      .eq('id', id)
+      .select('email, dob, first_name, last_name')
+      .eq('id', regEntry.admission_id)
       .single();
 
-    if (fetchError || !admission) return;
+    if (admError || !admData) return null;
 
-    await supabase.from('admission_forms').update({ status }).eq('id', id);
+    const { data: existingUser } = await supabase.from('users_table').select('*').eq('username', username).maybeSingle();
+    if (existingUser) return existingUser;
+
+    const { data: newUser, error: userErr } = await supabase.from('users_table').insert({
+      username: username,
+      password: defaultPassword,
+      first_name: admData.first_name,
+      last_name: admData.last_name,
+      role: 'student',
+      reg_number: regEntry.reg_number,
+      email: admData.email,
+      dob: admData.dob
+    }).select().single();
+
+    if (userErr) return null;
+    await refreshData();
+    return newUser;
+  };
+
+  const handleUpdateAdmission = async (id: string, status: AdmissionStatus, remarks?: string) => {
+    const { data: adm, error: fetchErr } = await supabase.from('admission_forms').select('*').eq('id', id).single();
+    if (fetchErr || !adm) return;
+
+    const { error: updateErr } = await supabase.from('admission_forms').update({ status, remarks }).eq('id', id);
+    if (updateErr) return;
 
     if (status === 'Approved') {
-      const { error: regError } = await supabase.from('admission_withdrawal').insert({
+      const { data: regEntry, error: regErr } = await supabase.from('admission_withdrawal').insert({
         admission_id: id,
-        student_name: `${admission.first_name} ${admission.last_name}`,
-        cnic: admission.cnic,
-        course_id: admission.course_id,
+        student_name: `${adm.first_name} ${adm.last_name}`,
+        cnic: adm.cnic,
+        course_id: adm.course_id,
         status: 'Active'
-      });
-      if (regError) console.error("Permanent Register Error:", regError);
+      }).select().single();
+      if (regErr) return;
+      await handleCreateStudentAccount(regEntry);
     }
-    
-    refreshData();
+    await refreshData();
   };
 
   const handleUpdateRegisterStatus = async (id: string, status: string) => {
-    await supabase.from('admission_withdrawal').update({ status }).eq('id', id);
-    refreshData();
+    const { error } = await supabase.from('admission_withdrawal').update({ status }).eq('id', id);
+    if (!error) await refreshData();
+  };
+
+  const handleAddInstructor = async (data: any) => {
+    const { data: user, error: userErr } = await supabase.from('users_table').insert({
+      username: data.username,
+      password: data.password,
+      first_name: data.name.split(' ')[0],
+      last_name: data.name.split(' ').slice(1).join(' '),
+      role: 'instructor',
+      email: data.email,
+      dob: data.dob
+    }).select().single();
+
+    if (userErr) return;
+    await supabase.from('instructors').insert({
+      user_id: user.id,
+      name: data.name,
+      qualification: data.qualification,
+      subject: data.subject,
+      class_assignment: data.classAssignment,
+      image: 'https://picsum.photos/seed/faculty/200/200'
+    });
+    await refreshData();
+  };
+
+  const handleRemoveInstructor = async (id: string) => {
+    const { error } = await supabase.from('instructors').delete().eq('id', id);
+    if (!error) await refreshData();
+  };
+
+  const handleAddResult = async (data: any) => {
+    const { error } = await supabase.from('exam_results').insert({
+      student_id: data.studentId,
+      exam_type: data.examType,
+      paper_total: data.paperTotal,
+      paper_obtained: data.paperObtained,
+      practical_total: data.practicalTotal,
+      practical_obtained: data.practicalObtained,
+      assignment_total: data.assignmentTotal,
+      assignment_obtained: data.assignmentObtained,
+      remarks: data.remarks
+    });
+    if (!error) await refreshData();
+  };
+
+  const handleRemoveResult = async (id: string) => {
+    const { error } = await supabase.from('exam_results').delete().eq('id', id);
+    if (!error) await refreshData();
+  };
+
+  const handleAddAlert = async (data: any) => {
+    const { error } = await supabase.from('news_alerts').insert({
+      category: data.category,
+      title: data.title,
+      content: data.content,
+      action_text: data.actionText,
+      action_page: data.actionPage,
+      expires_at: data.expiresAt,
+      priority: data.priority || 'Normal'
+    });
+    if (!error) await refreshData();
+  };
+
+  const handleRemoveAlert = async (id: string) => {
+    const { error } = await supabase.from('news_alerts').delete().eq('id', id);
+    if (!error) await refreshData();
   };
 
   const renderPage = () => {
     if (isLoading) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="w-16 h-16 border-4 border-teal-200 border-t-teal-800 rounded-full animate-spin mb-4"></div>
-          <p className="text-teal-800 font-black uppercase tracking-widest text-[10px]">Accessing Core Database...</p>
+          <div className="w-12 h-12 border-4 border-slate-200 border-t-brand-primary rounded-full animate-spin mb-6"></div>
+          <p className="type-label tracking-[0.4em]">Establishing Secure Connection...</p>
         </div>
       );
     }
 
     switch (currentPage) {
       case 'home':
-        return (
-          <Home 
-            courses={courses} 
-            products={products} 
-            instructors={instructors}
-            onApply={() => handlePageChange('admissions')} 
-            onBuy={() => handlePageChange('sales')}
-            onExploreCourses={() => handlePageChange('courses')}
-            onDonateClick={() => handlePageChange('donate')}
-          />
-        );
-      case 'about':
-        return <About instructors={instructors} />;
-      case 'donate':
-        return <Donate />;
-      case 'results':
-        return <Results admissions={admissions} results={results} courses={courses} />;
+        return <Home courses={courses} products={products} instructors={instructors} onApply={() => handlePageChange('admissions')} onBuy={() => handlePageChange('sales')} onExploreCourses={() => handlePageChange('courses')} onDonateClick={() => handlePageChange('donate')} onLoginClick={handleLoginTrigger} onSignupClick={() => handlePageChange('admissions')} />;
+      case 'about': return <About instructors={instructors} />;
+      case 'donate': return <Donate />;
+      case 'results': return <Results admissions={admissions} results={results} courses={courses} />;
       case 'courses':
         return (
-          <div className="max-w-7xl mx-auto px-4 py-16">
-            <h1 className="text-4xl font-bold text-gray-900 mb-8 uppercase text-center tracking-tighter">Empowering Skills for Women</h1>
+          <div className="max-w-7xl mx-auto px-6 py-24">
+            <div className="mb-16"><h2 className="type-h2">Available Programs</h2><p className="type-body mt-4">Browse our current technical and vocational offerings.</p></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {courses.map(course => (
-                <CourseCard 
-                  key={course.id} 
-                  course={course} 
-                  onApply={() => handlePageChange('admissions')} 
-                />
-              ))}
+              {courses.map(course => <CourseCard key={course.id} course={course} onApply={() => handlePageChange('admissions')} />)}
             </div>
           </div>
         );
-      case 'sales':
-        return <Sales products={products} onBuy={() => {}} />;
+      case 'sales': return <Sales products={products} onBuy={() => {}} isAdmin={currentUser?.role === 'admin'} onAddProduct={async (p) => {
+        const { error } = await supabase.from('products').insert({ name: p.name, price: p.price, image: p.image, slogan: p.slogan, description: p.description, stock_status: p.stockStatus, is_featured: p.isFeatured, category: p.category });
+        if (error) {
+          console.error("Error adding product:", error);
+          // Fallback if columns don't exist
+          await supabase.from('products').insert({ name: p.name, price: p.price, image: p.image, slogan: p.slogan, description: p.description });
+        }
+        refreshData();
+      }} onUpdateProduct={async (p) => {
+        const { error } = await supabase.from('products').update({ name: p.name, price: p.price, image: p.image, slogan: p.slogan, description: p.description, stock_status: p.stockStatus, is_featured: p.isFeatured, category: p.category }).eq('id', p.id);
+        if (error) {
+          console.error("Error updating product:", error);
+          // Fallback if columns don't exist
+          await supabase.from('products').update({ name: p.name, price: p.price, image: p.image, slogan: p.slogan, description: p.description }).eq('id', p.id);
+        }
+        refreshData();
+      }} />;
       case 'admissions':
-        return <Admissions admissions={admissions} courses={courses} onSubmit={handleSubmitAdmission} onSaveDraft={() => {}} />;
+        return <Admissions admissions={admissions} courses={courses} onSignupClick={handleSignupTrigger}
+          onSubmit={(f) => {
+            const payload = { first_name: f.firstName, last_name: f.lastName, cnic: f.cnic, dob: f.dob, gender: f.gender, qualification: f.qualification, occupation: f.occupation, guardian_name: f.guardianName, whatsapp: f.whatsapp, guardian_whatsapp: f.guardian_whatsapp || f.guardianWhatsapp, relation: f.relation, address: f.address, email: f.email, course_id: f.courseId || null, photo: f.photo, status: 'Pending', is_draft: false };
+            supabase.from('admission_forms').insert(payload).then(() => refreshData());
+          }} 
+          onSaveDraft={(f) => {
+            const payload = { first_name: f.firstName, last_name: f.lastName, cnic: f.cnic, dob: f.dob, gender: f.gender, qualification: f.qualification, occupation: f.occupation, guardian_name: f.guardianName, whatsapp: f.whatsapp, guardian_whatsapp: f.guardian_whatsapp || f.guardianWhatsapp, relation: f.relation, address: f.address, email: f.email, course_id: f.courseId || null, photo: f.photo, status: 'Pending', is_draft: true };
+            supabase.from('admission_forms').insert(payload).then(() => refreshData());
+          }} 
+        />;
       case 'admin':
         return currentUser?.role === 'admin' ? (
           <Admin 
             courses={courses} 
-            admissions={admissions}
-            instructors={instructors}
-            users={usersList}
-            results={results}
-            schedules={schedules}
-            alerts={alerts}
-            progress={progress}
-            attendance={attendance}
-            discussions={discussions}
-            admissionWithdrawal={admissionWithdrawal}
-            onUpdateCourse={() => {}} 
-            onAddCourse={() => {}}
-            onRemoveCourse={() => {}}
-            onUpdateAdmission={handleUpdateAdmission}
-            onUpdateRegisterStatus={handleUpdateRegisterStatus}
-            onAddInstructor={() => {}} 
-            onUpdateInstructor={() => {}}
-            onRemoveInstructor={() => {}}
-            onAddResult={() => {}}
-            onRemoveResult={() => {}}
-            onUpdateSchedules={() => {}}
-            onUpdateAlerts={() => {}}
-            onPageChange={handlePageChange}
+            admissions={admissions} 
+            instructors={instructors} 
+            users={usersList} 
+            results={results} 
+            schedules={schedules} 
+            alerts={alerts} 
+            admissionWithdrawal={admissionWithdrawal} 
+            onAddCourse={handleAddCourse} 
+            onRemoveCourse={handleRemoveCourse} 
+            onUpdateAdmission={handleUpdateAdmission} 
+            onUpdateRegisterStatus={handleUpdateRegisterStatus} 
+            onAddInstructor={handleAddInstructor} 
+            onRemoveInstructor={handleRemoveInstructor} 
+            onAddResult={handleAddResult} 
+            onRemoveResult={handleRemoveResult} 
+            onAddAlert={handleAddAlert}
+            onRemoveAlert={handleRemoveAlert}
+            onPageChange={handlePageChange} 
+            onRefreshData={refreshData} 
+            onCreateStudentAccount={handleCreateStudentAccount} 
           />
-        ) : (
-          <div className="p-12 text-center font-black uppercase text-rose-600">Access Restricted to Admin Personnel</div>
-        );
+        ) : ( <div className="p-12 text-center type-label text-brand-accent">Access Restricted</div> );
       case 'lms':
-        return (
-          <LMS 
-            externalUser={currentUser} 
-            onLogout={handleLogout} 
-            onPageChange={handlePageChange}
-            dbData={{
-              courses,
-              products,
-              admissions,
-              currentUser,
-              instructors,
-              results,
-              attendance,
-              schedules,
-              alerts,
-              users: usersList,
-              quizzes,
-              discussions,
-              progress
-            }}
-          />
-        );
+        return <LMS externalUser={currentUser} onLogout={handleLogout} onPageChange={handlePageChange} onRefreshData={refreshData} onLoginClick={handleLoginTrigger} dbData={{ courses, products, admissions, currentUser, instructors, results, attendance, schedules, alerts, users: usersList, quizzes, discussions, progress, register: admissionWithdrawal }} />;
       default:
-        return <Home courses={courses} products={products} instructors={instructors} onApply={() => handlePageChange('admissions')} onBuy={() => {}} onExploreCourses={() => handlePageChange('courses')} onDonateClick={() => handlePageChange('donate')} />;
+        return <Home courses={courses} products={products} instructors={instructors} onApply={() => handlePageChange('admissions')} onBuy={() => {}} onExploreCourses={() => handlePageChange('courses')} onDonateClick={() => handlePageChange('donate')} onLoginClick={handleLoginTrigger} onSignupClick={() => handlePageChange('admissions')} />;
     }
   };
 
   return (
-    <LiveSessionProvider>
-      <div className="min-h-screen bg-white">
-        <header className="sticky top-0 z-50 no-print flex flex-col">
+    <div className="min-h-screen bg-brand-slate flex flex-col">
+      <header className="sticky top-0 z-50 no-print flex flex-col shadow-sm shrink-0">
+          <NotificationTicker 
+            liveSession={activeOrNextSession?.status === 'Live' ? activeOrNextSession : null} 
+            sessionName={sessionDisplayName} 
+          />
           <LiveStatusBar 
-            nextSession={nextSession}
-            courses={courses}
+            session={activeOrNextSession}
+            sessionName={sessionDisplayName}
             onJoinNow={() => handlePageChange('lms')} 
+            onToggleSidebar={() => setIsSidebarOpen(true)}
+            onLogoClick={() => handlePageChange('home')}
           />
-          <Navbar 
-            currentPage={currentPage}
-            setCurrentPage={handlePageChange}
-            onLoginClick={() => setIsAuthOpen(true)}
-            currentUser={currentUser}
-            onLogout={handleLogout}
-          />
-          <NotificationTicker />
+          <MainNav currentPage={currentPage} setCurrentPage={handlePageChange} currentUser={currentUser} />
         </header>
+
+        <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} currentPage={currentPage} setCurrentPage={handlePageChange} currentUser={currentUser} onLogout={handleLogout} onLoginClick={handleLoginTrigger} />
+
+        <main className="relative z-0 flex-grow">{renderPage()}</main>
         
-        <main>{renderPage()}</main>
-
-        <footer className="bg-teal-900 text-white py-12 px-4 border-t border-teal-800">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="flex items-center gap-4">
-               <div className="w-12 h-12 bg-white rounded-full overflow-hidden border-2 border-teal-500">
-                  <img src="https://picsum.photos/seed/akbarlogo/100/100" alt="Logo" />
-               </div>
-               <span className="font-bold text-sm uppercase tracking-widest">AKTVI Institutional Core</span>
-            </div>
+        {/* Harmonized Institutional Footer */}
+        <footer className="relative bg-brand-dark text-white pt-16 pb-10 px-6 no-print overflow-hidden border-t border-brand-primary/10">
             
-            <div className="flex items-center gap-3 bg-black/20 p-3 rounded-2xl border border-white/5">
-              {dbStatus === 'online' ? (
-                <>
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981] animate-pulse"></div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Database Core: Online</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_#f43f5e] animate-pulse"></div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Database Core: Offline</span>
-                </>
-              )}
+            {/* Subtle Background Watermark */}
+            <div className="absolute inset-0 pointer-events-none opacity-[0.03] select-none font-urdu text-[10rem] md:text-[14rem] flex items-center justify-center whitespace-nowrap">
+              اکبر خان ٹیکنیکل انسٹیٹیوٹ
             </div>
-          </div>
-        </footer>
 
-        {isAuthOpen && (
-          <AuthModal 
-            isOpen={isAuthOpen} 
-            onClose={() => setIsAuthOpen(false)} 
-            onLogin={handleLogin}
-            users={usersList}
-          />
-        )}
-      </div>
-    </LiveSessionProvider>
+            <div className="container max-w-7xl mx-auto relative z-10">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start mb-16">
+                
+                {/* Branding Lockup - Simplified Hierarchy */}
+                <div className="space-y-6">
+                  <div className="flex flex-col items-start">
+                     <span className="text-[8px] font-black text-brand-primary uppercase tracking-[0.4em] mb-2 opacity-60">Sovereign Institution</span>
+                     <h2 className="font-outfit text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-tight">
+                      Akbar Khan <br className="hidden md:block"/>
+                      Technical & Vocational <br className="hidden md:block"/>
+                      <span className="text-brand-primary">Institute Mardan</span>
+                     </h2>
+                     
+                     <div className="mt-6 flex items-center gap-3 px-4 py-1.5 rounded-lg border border-brand-accent/30 bg-brand-accent/5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-brand-accent" />
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-brand-accent">
+                          Regd. Trade Testing Board
+                        </span>
+                     </div>
+                  </div>
+                </div>
+
+                {/* Information Modules - Uniform Sizing */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+                   <div className="space-y-4">
+                      <h4 className="text-[9px] font-black text-brand-primary uppercase tracking-widest">Connect</h4>
+                      <div className="space-y-3">
+                         <a href="tel:03155241756" className="flex items-center gap-3 text-sm font-medium text-teal-100/80 hover:text-white transition-colors">
+                            <Phone className="w-4 h-4 text-brand-primary/60" /> 0315-5241756
+                         </a>
+                         <div className="flex items-center gap-3 text-sm font-medium text-teal-100/80">
+                            <Mail className="w-4 h-4 text-brand-primary/60" /> admin@aktvi.edu.pk
+                         </div>
+                         <div className="flex items-center gap-3 text-sm font-medium text-teal-100/80">
+                            <Globe className="w-4 h-4 text-brand-primary/60" /> aktvi.edu.pk
+                         </div>
+                      </div>
+                   </div>
+
+                   <div className="space-y-4">
+                      <h4 className="text-[9px] font-black text-brand-primary uppercase tracking-widest">Campus</h4>
+                      <a href="https://maps.app.goo.gl/ngzW4XdB3LwC2gEW6" target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 group cursor-pointer">
+                         <MapPin className="w-4 h-4 text-brand-primary/60 shrink-0 mt-0.5 group-hover:text-brand-primary transition-colors" />
+                         <p className="text-sm font-medium text-teal-100/80 leading-relaxed group-hover:text-white transition-colors">
+                            2nd Floor, BAAZ PLAZA,<br/>
+                            Gujar Garhi Bypass,<br/>
+                            Mardan, KP, Pakistan.
+                         </p>
+                      </a>
+                   </div>
+                </div>
+              </div>
+
+              {/* Bottom Utility Bar - Symmetric Balance */}
+              <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
+                <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-2.5">
+                      <div className={`w-1.5 h-1.5 rounded-full ${dbStatus === 'online' ? 'bg-brand-primary' : 'bg-brand-accent'} animate-pulse`}></div>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-teal-100/30">
+                        Sync: {dbStatus.toUpperCase()}
+                      </span>
+                   </div>
+                   <span className="text-[8px] font-black uppercase tracking-widest text-teal-100/30">
+                      AK-EDU PROTOCOL V1.0
+                   </span>
+                </div>
+                
+                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-teal-100/20">
+                  © 2024 AK FOUNDATION MARDAN • EMPOWERING THROUGH SKILL
+                </p>
+              </div>
+            </div>
+          </footer>
+
+        <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} onLogin={handleLogin} users={usersList} initialView={authView} />
+    </div>
   );
 };
 

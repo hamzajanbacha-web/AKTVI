@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface ImageSettings {
   brightness: number;
@@ -7,6 +7,14 @@ interface ImageSettings {
   saturate: number;
   hueRotate: number;
   blur: number;
+}
+
+interface ChromaKeySettings {
+  active: boolean;
+  bgImage: string | null;
+  similarity: number;
+  smoothness: number;
+  keyColor: string;
 }
 
 interface LiveSessionContextType {
@@ -19,7 +27,7 @@ interface LiveSessionContextType {
   isTorchOn: boolean;
   zoomLevel: number;
   imageSettings: ImageSettings;
-  chromaKey: { active: boolean; bgImage: string | null };
+  chromaKey: ChromaKeySettings;
   startCamera: (deviceId?: string) => Promise<void>;
   stopCamera: () => void;
   cycleCamera: () => Promise<void>;
@@ -32,6 +40,7 @@ interface LiveSessionContextType {
   setZoom: (level: number) => void;
   updateImageSettings: (settings: Partial<ImageSettings>) => void;
   toggleChromaKey: (active: boolean, bg?: string) => void;
+  updateChromaKeySettings: (settings: Partial<ChromaKeySettings>) => void;
 }
 
 const LiveSessionContext = createContext<LiveSessionContextType | undefined>(undefined);
@@ -55,9 +64,12 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
     blur: 0
   });
 
-  const [chromaKey, setChromaKey] = useState<{ active: boolean; bgImage: string | null }>({
+  const [chromaKey, setChromaKey] = useState<ChromaKeySettings>({
     active: false,
-    bgImage: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200'
+    bgImage: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200',
+    similarity: 15,
+    smoothness: 10,
+    keyColor: '#00FF00'
   });
 
   const startCamera = async (deviceId?: string) => {
@@ -65,24 +77,25 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Camera API not supported in this environment");
       }
+      activeStream?.getTracks().forEach(track => track.stop());
       
+      // Try with ideal constraints first
       const constraints: MediaStreamConstraints = {
         audio: true,
         video: {
-          deviceId: deviceId ? { exact: deviceId } : undefined,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          aspectRatio: 1.777777778, 
-          frameRate: { max: 30 }
+          deviceId: deviceId ? { ideal: deviceId } : undefined,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         }
       };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      const videoTrack = stream.getVideoTracks()[0];
-      const capabilities = videoTrack.getCapabilities() as any;
-      if (capabilities.zoom) {
-        await videoTrack.applyConstraints({ advanced: [{ zoom: 1 }] } as any);
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (innerErr) {
+        console.warn("Retrying with basic constraints", innerErr);
+        // Fallback to basic video if ideal fails
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
       }
 
       setActiveStream(stream);
@@ -91,7 +104,7 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (deviceId) setCurrentDeviceId(deviceId);
     } catch (err) {
       console.error("Camera error", err);
-      alert("Could not access camera. Please check permissions.");
+      alert("Media Access Error: Please check device permissions or if another app is using the camera.");
     }
   };
 
@@ -105,44 +118,39 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(d => d.kind === 'videoinput');
       if (videoDevices.length <= 1) return;
-
       const currentIndex = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
       const nextIndex = (currentIndex + 1) % videoDevices.length;
-      const nextDevice = videoDevices[nextIndex];
-
-      stopCamera();
-      await startCamera(nextDevice.deviceId);
-    } catch (err) {
-      console.error("Cycling error", err);
-    }
+      await startCamera(videoDevices[nextIndex].deviceId);
+    } catch (err) { console.error("Cycling error", err); }
   };
 
   const toggleTorch = async () => {
     const track = activeStream?.getVideoTracks()[0];
     if (!track) return;
-    
     try {
-      const constraints = { advanced: [{ torch: !isTorchOn }] } as any;
-      await track.applyConstraints(constraints);
+      const capabilities = (track as any).getCapabilities?.() || {};
+      if (!capabilities.torch) return;
+      await track.applyConstraints({ advanced: [{ torch: !isTorchOn }] } as any);
       setIsTorchOn(!isTorchOn);
-    } catch (err) {
-      console.warn("Torch not supported on this device/browser");
-    }
+    } catch (err) { console.warn("Torch failed", err); }
   };
 
   const startScreenShare = async () => {
     try {
-      // Robust check for getDisplayMedia availability
       if (!navigator.mediaDevices || !(navigator.mediaDevices as any).getDisplayMedia) {
-        throw new Error("Screen sharing is not supported in this browser/environment (requires HTTPS).");
+        alert("Screen sharing is not supported on this device or browser.");
+        return;
       }
-      
-      const stream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({ 
+        video: { cursor: "always" },
+        audio: true 
+      });
+      stream.getVideoTracks()[0].onended = () => terminateSession();
       setScreenStream(stream);
       setSessionMode('screen');
-    } catch (err: any) {
-      console.error("Screen share error", err);
-      alert(err.message || "Failed to start screen share.");
+    } catch (err) { 
+      console.error("Screen share error", err); 
+      alert("Failed to start screen share: " + (err instanceof Error ? err.message : "Unknown error"));
     }
   };
 
@@ -150,21 +158,36 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
     stopCamera();
     screenStream?.getTracks().forEach(track => track.stop());
     setScreenStream(null);
+    if (mediaUrl) URL.revokeObjectURL(mediaUrl);
     setMediaUrl(null);
     setSessionMode('idle');
+    setIsMuted(false);
+    setIsCameraOff(false);
+    setIsTorchOn(false);
+    setZoomLevel(1);
+    setImageSettings({
+      brightness: 100,
+      contrast: 100,
+      saturate: 100,
+      hueRotate: 0,
+      blur: 0
+    });
+    setChromaKey({
+      active: false,
+      bgImage: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200',
+      similarity: 15,
+      smoothness: 10,
+      keyColor: '#00FF00'
+    });
   };
 
   const toggleMute = () => {
-    if (activeStream) {
-      activeStream.getAudioTracks().forEach(track => track.enabled = !track.enabled);
-    }
+    if (activeStream) activeStream.getAudioTracks().forEach(t => t.enabled = !t.enabled);
     setIsMuted(!isMuted);
   };
 
   const toggleCamera = () => {
-    if (activeStream) {
-      activeStream.getVideoTracks().forEach(track => track.enabled = !track.enabled);
-    }
+    if (activeStream) activeStream.getVideoTracks().forEach(t => t.enabled = !t.enabled);
     setIsCameraOff(!isCameraOff);
   };
 
@@ -173,25 +196,23 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const toggleChromaKey = (active: boolean, bg?: string) => {
-    setChromaKey(prev => ({ active, bgImage: bg || prev.bgImage }));
+    setChromaKey(prev => ({ ...prev, active, bgImage: bg || prev.bgImage }));
+  };
+
+  const updateChromaKeySettings = (newSettings: Partial<ChromaKeySettings>) => {
+    setChromaKey(prev => ({ ...prev, ...newSettings }));
   };
 
   const setZoom = async (level: number) => {
     setZoomLevel(level);
     const track = activeStream?.getVideoTracks()[0];
     if (track) {
-      const capabilities = track.getCapabilities() as any;
-      if (capabilities.zoom) {
-        try {
-          await track.applyConstraints({ advanced: [{ zoom: level }] } as any);
-        } catch (e) {
-          console.warn("Hardware zoom failed, falling back to UI zoom");
-        }
-      }
+      try { await track.applyConstraints({ advanced: [{ zoom: level }] } as any); } catch (e) { }
     }
   };
 
   const playMediaFile = (file: File) => {
+    if (mediaUrl) URL.revokeObjectURL(mediaUrl);
     setMediaUrl(URL.createObjectURL(file));
     setSessionMode('media');
   };
@@ -201,7 +222,8 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
       sessionMode, activeStream, screenStream, mediaUrl, isMuted, isCameraOff, isTorchOn, 
       zoomLevel, imageSettings, chromaKey,
       startCamera, stopCamera, cycleCamera, toggleTorch, startScreenShare, playMediaFile, 
-      terminateSession, toggleMute, toggleCamera, setZoom, updateImageSettings, toggleChromaKey
+      terminateSession, toggleMute, toggleCamera, setZoom, updateImageSettings, toggleChromaKey,
+      updateChromaKeySettings
     }}>
       {children}
     </LiveSessionContext.Provider>

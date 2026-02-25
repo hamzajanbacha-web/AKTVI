@@ -1,83 +1,132 @@
 
 import React, { useState, useEffect } from 'react';
-import { Activity, Calendar, ArrowRight, Clock } from 'lucide-react';
-import { SessionSchedule, Course } from '../types';
+import { Menu, Radio } from 'lucide-react';
+import { SessionSchedule } from '../types';
 
 interface LiveStatusBarProps {
-  nextSession?: SessionSchedule | null;
-  courses: Course[];
+  session: SessionSchedule | null;
+  sessionName: string;
   onJoinNow: () => void;
+  onToggleSidebar: () => void;
+  onLogoClick: () => void;
 }
 
-const LiveStatusBar: React.FC<LiveStatusBarProps> = ({ nextSession, courses, onJoinNow }) => {
-  const [timeLeft, setTimeLeft] = useState<string>("");
-
-  const course = courses.find(c => c.id === nextSession?.courseId);
+const LiveStatusBar: React.FC<LiveStatusBarProps> = ({ 
+  session, 
+  sessionName, 
+  onJoinNow, 
+  onToggleSidebar, 
+  onLogoClick
+}) => {
+  const [timeLeft, setTimeLeft] = useState<string>('');
 
   useEffect(() => {
-    if (!nextSession || nextSession.status !== 'Scheduled') return;
+    if (!session || session.status === 'Live') {
+      setTimeLeft('');
+      return;
+    }
 
-    const timer = setInterval(() => {
+    const updateTimer = () => {
       const now = new Date().getTime();
-      const start = new Date(nextSession.startTime).getTime();
-      const diff = start - now;
+      const target = new Date(session.startTime).getTime();
+      const difference = target - now;
 
-      if (diff <= 0) {
-        setTimeLeft("00:00:00");
-        clearInterval(timer);
-        // Status should technically transition to Live here or on refresh
-      } else {
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
-        setTimeLeft(
-          `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-        );
+      if (difference <= 0 || isNaN(difference)) {
+        setTimeLeft('');
+        return;
       }
-    }, 1000);
 
-    return () => clearInterval(timer);
-  }, [nextSession]);
+      const hours = Math.floor(difference / (1000 * 60 * 60));
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
 
-  if (!nextSession) return null;
+      setTimeLeft(
+        `${hours.toString().padStart(2, '0')}:${minutes
+          .toString()
+          .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      );
+    };
 
-  const isLive = nextSession.status === 'Live';
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [session]);
+
+  const isLive = session?.status === 'Live';
 
   return (
-    <div className="bg-teal-950 text-white py-2.5 relative z-[60] no-print border-b border-white/5 transition-all duration-500">
-      <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-center gap-3 md:gap-8">
-        
-        {/* Status indicator */}
-        <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg ${
-            isLive ? 'bg-rose-600 animate-pulse' : 'bg-teal-800 border border-white/10'
-          }`}>
-            {isLive ? <Activity className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-            {isLive ? 'Live Now' : 'Scheduled'}
+    <div className="relative flex w-full no-print bg-brand-dark h-14 md:h-20 items-center justify-between border-b border-brand-primary/10 shadow-lg font-inter px-4 md:px-8">
+      
+      {/* Branding Section */}
+      <div className="flex items-center gap-3 md:gap-5">
+        <button 
+          className="flex items-center gap-3 group transition-transform active:scale-95"
+          onClick={onLogoClick}
+          title="Institutional Home"
+        >
+          <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl border border-brand-primary/20 overflow-hidden shadow-2xl group-hover:border-brand-primary transition-all text-white flex items-center justify-center bg-white/5">
+             <img 
+                src="https://picsum.photos/seed/akbarlogo/200/200" 
+                alt="AKTVI Logo" 
+                className="w-full h-full object-cover"
+              />
+          </div>
+          <div className="hidden sm:flex flex-col items-start leading-none">
+            <span className="text-[8px] md:text-[9px] font-black text-brand-primary/60 uppercase tracking-[0.3em] mb-1">Institutional</span>
+            <span className="text-sm md:text-lg font-black text-white tracking-tighter uppercase font-outfit">AKTVI MARDAN</span>
+          </div>
+        </button>
+      </div>
+
+      {/* Dynamic Session Tracking Center */}
+      <div className="flex items-center gap-3 md:gap-10">
+        <div className="flex items-center gap-3 md:gap-6 pr-3 md:pr-10 border-r border-white/5">
+          
+          <div className="relative flex items-center justify-center shrink-0">
+            {isLive ? (
+              <>
+                <div className="absolute w-4 h-4 rounded-full bg-brand-accent/40 animate-ping"></div>
+                <Radio className="relative w-4 h-4 text-brand-accent" />
+              </>
+            ) : (
+              <div className="w-2 h-2 rounded-full bg-brand-primary/40"></div>
+            )}
           </div>
           
-          <div className="flex flex-col">
-            <span className="text-[10px] md:text-xs font-black uppercase tracking-tight leading-none text-white/90">
-              {course?.name || "Technical Session"}: {nextSession.topic}
+          <div className="flex flex-col items-start leading-tight max-w-[100px] md:max-w-[220px]">
+            <span className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-1 ${isLive ? 'text-brand-accent' : 'text-brand-primary'}`}>
+              {isLive ? 'LIVE SESSION' : 'NEXT CLASS'}
             </span>
-            {!isLive && (
-              <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest mt-0.5">
-                Starts in: {timeLeft}
-              </span>
+            <span className="text-[10px] md:text-sm font-bold text-white truncate w-full">
+              {sessionName}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {!isLive && timeLeft && (
+              <div className="hidden sm:flex px-3 py-1 bg-white/5 border border-white/10 rounded-lg">
+                 <span className="text-[9px] font-mono font-bold text-teal-200 tracking-tighter uppercase">T-MINUS {timeLeft}</span>
+              </div>
+            )}
+
+            {isLive && (
+              <button 
+                onClick={onJoinNow}
+                className="px-3 md:px-6 py-1.5 md:py-2.5 bg-brand-accent text-white text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-rose-700 transition-all shadow-[0_0_15px_#BE185D44] active:scale-95 whitespace-nowrap"
+              >
+                Join Now
+              </button>
             )}
           </div>
         </div>
 
-        {/* Action Button */}
-        {isLive && (
-          <button 
-            onClick={onJoinNow}
-            className="flex items-center gap-2 bg-white text-teal-950 px-6 py-2 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest hover:bg-emerald-400 hover:text-white transition-all shadow-xl active:scale-95 group animate-scaleIn"
-          >
-            Enter Classroom <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-          </button>
-        )}
+        {/* Sidebar Toggle - HIDDEN ON DESKTOP */}
+        <button 
+          onClick={onToggleSidebar}
+          className="lg:hidden p-2.5 md:p-4 text-brand-primary/60 hover:text-white hover:bg-white/5 rounded-2xl transition-all active:scale-90"
+        >
+          <Menu className="w-5 h-5 md:w-6 md:h-6" />
+        </button>
       </div>
     </div>
   );

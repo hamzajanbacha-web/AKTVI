@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { X, Lock, User as UserIcon, Calendar, KeyRound, ArrowLeft, AlertCircle, ShieldCheck } from 'lucide-react';
+import { X, Lock, User as UserIcon, Calendar, KeyRound, ArrowLeft, AlertCircle, ShieldCheck, UserPlus, Mail, Fingerprint, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { mapUser } from '../db';
 
@@ -10,10 +10,11 @@ interface AuthModalProps {
   onClose: () => void;
   onLogin: (user: User) => void;
   users: User[];
+  initialView?: 'login' | 'signup' | 'forgot' | 'change-old';
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }) => {
-  const [view, setView] = useState<'login' | 'forgot' | 'change' | 'change-old'>('login');
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users, initialView = 'login' }) => {
+  const [view, setView] = useState<'login' | 'forgot' | 'change' | 'change-old' | 'signup'>(initialView);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
@@ -23,19 +24,34 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Sync view when initialView changes or modal reopens
+  useEffect(() => {
+    if (isOpen) {
+      setView(initialView);
+      setError(null);
+    }
+  }, [isOpen, initialView]);
+
+  // Signup hypothetical fields
+  const [signupData, setSignupData] = useState({
+    fullName: '',
+    email: '',
+    cnic: '',
+    mobile: ''
+  });
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsProcessing(true);
 
     try {
-      // Direct query to users_table for credentials verification
       const { data, error: dbError } = await supabase
         .from('users_table')
         .select('*')
         .eq('username', username)
         .eq('password', password)
-        .maybeSingle(); // maybeSingle handles 0 or 1 results gracefully
+        .maybeSingle();
 
       if (dbError) {
         console.error("Database Login Error:", dbError);
@@ -144,11 +160,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
     }
   };
 
+  const handleSignupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    alert("Sign Up Request Received. Institutional accounts are normally created upon admission approval. Our team will review your details.");
+    resetForm('login');
+  };
+
   const resetForm = (newView: typeof view) => {
     setView(newView);
     setNewPassword('');
     setConfirmPassword('');
     setOldPassword('');
+    setUsername('');
+    setPassword('');
+    setDob('');
     setError(null);
   };
 
@@ -156,6 +181,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
 
   const inputClasses = "w-full pl-10 pr-4 py-3 rounded-xl bg-teal-950 border border-teal-800 outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-teal-400 font-medium transition-all shadow-inner disabled:opacity-50";
   const standardInputClasses = "w-full px-4 py-3 rounded-xl bg-teal-950 border border-teal-800 outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-teal-400 font-medium transition-all shadow-inner disabled:opacity-50";
+  const labelSmall = "text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1";
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -172,6 +198,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
               {view === 'forgot' && 'Reset Password'}
               {view === 'change' && 'New Password'}
               {view === 'change-old' && 'Update Password'}
+              {view === 'signup' && 'Create Account'}
             </h2>
           </div>
           <p className="text-teal-100 text-xs font-bold uppercase tracking-widest opacity-80">
@@ -190,7 +217,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
           {view === 'login' ? (
             <form onSubmit={handleLoginSubmit} className="space-y-6">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Username</label>
+                <label className={labelSmall}>Username</label>
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                   <input 
@@ -204,7 +231,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Password</label>
+                <label className={labelSmall}>Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                   <input 
@@ -224,6 +251,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
               >
                 {isProcessing ? 'Verifying...' : 'Sign In'}
               </button>
+              
               <div className="flex flex-col gap-3 pt-2">
                 <button 
                   type="button"
@@ -240,11 +268,66 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                   <KeyRound className="w-3.5 h-3.5" /> Change Password
                 </button>
               </div>
+
+              {/* Added Sign Up Prompt */}
+              <div className="pt-6 border-t border-teal-100 mt-4 text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Don't have an account? 
+                  <button 
+                    type="button"
+                    onClick={() => resetForm('signup')} 
+                    className="ml-2 text-teal-600 font-black hover:text-teal-800 transition-colors"
+                  >
+                    Sign Up
+                  </button>
+                </p>
+              </div>
+            </form>
+          ) : view === 'signup' ? (
+            <form onSubmit={handleSignupSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className={labelSmall}>Full Name</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
+                  <input type="text" required className={inputClasses} placeholder="Enter your full name" value={signupData.fullName} onChange={e => setSignupData({...signupData, fullName: e.target.value})} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelSmall}>CNIC / B-Form</label>
+                <div className="relative">
+                  <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
+                  <input type="text" required className={inputClasses} placeholder="00000-0000000-0" value={signupData.cnic} onChange={e => setSignupData({...signupData, cnic: e.target.value})} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelSmall}>Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
+                  <input type="email" required className={inputClasses} placeholder="your@email.com" value={signupData.email} onChange={e => setSignupData({...signupData, email: e.target.value})} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelSmall}>Mobile Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
+                  <input type="tel" required className={inputClasses} placeholder="+92XXXXXXXXXX" value={signupData.mobile} onChange={e => setSignupData({...signupData, mobile: e.target.value})} />
+                </div>
+              </div>
+              <button type="submit" className="w-full py-4 bg-emerald-600 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:bg-emerald-700 shadow-xl transition-all active:scale-95 mt-4">
+                Request Account
+              </button>
+              <button 
+                type="button"
+                onClick={() => resetForm('login')}
+                className="w-full text-center text-[10px] font-black text-slate-400 hover:text-teal-600 uppercase tracking-widest flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Already have an account? Login
+              </button>
             </form>
           ) : view === 'forgot' ? (
             <form onSubmit={handleForgotSubmit} className="space-y-6">
                <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Account Username</label>
+                <label className={labelSmall}>Account Username</label>
                 <input 
                   type="text" required
                   disabled={isProcessing}
@@ -255,7 +338,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Date of Birth</label>
+                <label className={labelSmall}>Date of Birth</label>
                 <div className="relative">
                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500 w-5 h-5" />
                    <input 
@@ -285,7 +368,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
           ) : view === 'change-old' ? (
             <form onSubmit={handleOldPasswordChangeSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Username</label>
+                <label className={labelSmall}>Username</label>
                 <input 
                   type="text" required
                   disabled={isProcessing}
@@ -296,7 +379,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Current Password</label>
+                <label className={labelSmall}>Current Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
@@ -307,7 +390,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Password</label>
+                <label className={labelSmall}>New Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
@@ -318,7 +401,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm New Password</label>
+                <label className={labelSmall}>Confirm New Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
@@ -346,7 +429,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
           ) : (
             <form onSubmit={handleChangePassword} className="space-y-6">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">New Password</label>
+                <label className={labelSmall}>New Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}
@@ -357,7 +440,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, users }
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-teal-800 uppercase tracking-widest ml-1">Confirm Password</label>
+                <label className={labelSmall}>Confirm Password</label>
                 <input 
                   type="password" required
                   disabled={isProcessing}

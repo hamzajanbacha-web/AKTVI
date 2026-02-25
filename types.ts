@@ -1,5 +1,5 @@
 
-export type CourseStatus = 'Active' | 'Pending' | 'Scheduled' | 'Postponed' | 'active' | 'scheduled' | 'frozen';
+export type CourseStatus = 'Active' | 'Pending' | 'Discarded' | 'Live' | 'Scheduled' | 'Postponed' | 'active' | 'scheduled' | 'frozen';
 export type AdmissionStatus = 'Pending' | 'Approved' | 'Rejected';
 export type RegisterStatus = 'Approved' | 'Suspended' | 'Active' | 'Certified' | 'Rusticated';
 export type ExamType = '1st Term' | '2nd Term' | 'Final Exam' | 'Board Exam';
@@ -19,12 +19,35 @@ export interface Course {
   status: CourseStatus;
   mode?: 'ON CAMPUS' | 'ONLINE';
   category?: string;
-  // Fix: Added optional modules array for curriculum tracking in LMS.tsx
-  modules?: {
-    id: string;
-    title: string;
-    duration: string;
-  }[];
+  modules?: CourseModule[];
+  resources?: InstitutionalResource[];
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  duration: string;
+  isCompleted?: boolean;
+}
+
+export interface InstitutionalResource {
+  id: string;
+  title: string;
+  type: 'PDF' | 'VIDEO' | 'ZIP';
+  url: string;
+}
+
+// Fixed missing Product interface
+export interface Product {
+  id: string;
+  name: string;
+  price: string;
+  image: string;
+  slogan: string;
+  description: string;
+  stockStatus?: 'Available' | 'Out of Stock';
+  isFeatured?: boolean;
+  category?: string;
 }
 
 export interface User {
@@ -37,6 +60,7 @@ export interface User {
   role: 'admin' | 'student' | 'instructor';
   email?: string;
   regNumber?: string;
+  courseId?: string; 
   points?: number;
   badges?: string[];
 }
@@ -60,8 +84,8 @@ export interface AdmissionForm {
   photo?: string;
   status: AdmissionStatus;
   isDraft: boolean;
-  // Fix: Added optional regNumber as it is used for tracking and result lookups in Results.tsx
   regNumber?: string;
+  remarks?: string;
 }
 
 export interface AdmissionWithdrawal {
@@ -76,6 +100,7 @@ export interface AdmissionWithdrawal {
   withdrawalDate?: string;
   status: RegisterStatus;
   remarks?: string;
+  photo?: string;
 }
 
 export interface NewsAlert {
@@ -87,15 +112,6 @@ export interface NewsAlert {
   actionPage: string;
   expiresAt: string;
   priority: 'Normal' | 'High';
-}
-
-export interface Product {
-  id: string;
-  name: string;
-  price: string;
-  image: string;
-  slogan: string;
-  description: string;
 }
 
 export interface ExamResult {
@@ -121,17 +137,13 @@ export interface SessionSchedule {
   status: ScheduleStatus;
 }
 
-/**
- * Fix: Added missing interfaces requested by components across the application
- */
-
 export interface Instructor {
   id: string;
   userId: string;
   name: string;
   qualification: string;
   subject: string;
-  classAssignment: string;
+  class_assignment: string;
   image: string;
 }
 
@@ -170,22 +182,18 @@ export interface UserProgress {
   percentage: number;
 }
 
-export interface ClassroomParticipant {
-  id: string;
-  name: string;
-  avatar?: string;
-  role: string;
-  isMuted: boolean;
-  isCameraOff: boolean;
-  isHandRaised: boolean;
-  isLive: boolean;
-  isSpeaking: boolean;
-}
-
 export interface ChatMessage {
   id: string;
   role: 'instructor' | 'student';
   text: string;
   userName: string;
   timestamp: string;
+}
+
+export interface ClassroomParticipant {
+  id: string;
+  userId: string;
+  name: string;
+  role: 'student' | 'instructor' | 'admin';
+  joinedAt: string;
 }

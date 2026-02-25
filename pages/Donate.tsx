@@ -1,90 +1,193 @@
 
 import React, { useState } from 'react';
-import { Heart, ShieldCheck, Sparkles, Smartphone, Landmark, QrCode, ArrowRight, X, Coins, Users } from 'lucide-react';
+import { Heart, ShieldCheck, Sparkles, Smartphone, Landmark, QrCode, ArrowRight, X, Coins, Users, GraduationCap } from 'lucide-react';
 
 const Donate: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
 
   const donationTiers = [
-    { amount: '5,000', label: 'Student Kit', desc: 'Provide essential stationery and basic fabric tools for one student.' },
-    { amount: '15,000', label: 'Monthly Scholarship', desc: 'Full monthly tuition and resource coverage for a specialized vocational course.' },
-    { amount: '50,000', label: 'Empowerment Grant', desc: 'Sponsor a student for an entire 6-month diploma including certification fees.' },
+    { 
+      amount: '5,000', 
+      label: 'Student Kit', 
+      desc: 'Provide essential stationery and basic fabric tools for one student.',
+      emoji: '🎒'
+    },
+    { 
+      amount: '10,000', 
+      label: 'Monthly Sponsor', 
+      desc: 'Cover training and utility costs for a month.',
+      emoji: '🏫' 
+    },
+    { 
+      amount: '30,000', 
+      label: 'Full Scholarship', 
+      desc: 'Sponsor a student for an entire 6-month diploma course.',
+      emoji: '🎓'
+    },
   ];
 
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section */}
-      <section className="relative py-24 bg-teal-950 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-emerald-500 blur-[150px] rounded-full translate-x-1/2 -translate-y-1/2"></div>
+      <section className="relative min-h-[85vh] flex items-center justify-center bg-[#050B18] overflow-hidden py-20">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-teal-500/10 blur-[120px] rounded-full"></div>
+          <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[#E0218A]/5 blur-[150px] rounded-full translate-x-1/2"></div>
         </div>
         
-        <div className="max-w-7xl mx-auto px-4 relative z-10 text-center">
-          <div className="inline-flex items-center gap-3 px-4 py-2 bg-white/10 border border-white/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mb-8">
-            <Heart className="w-4 h-4 fill-emerald-400" /> Fuel a Future
+        <div className="container max-w-4xl mx-auto px-6 relative z-10 text-center animate-fadeIn">
+          <div className="mb-8 md:mb-12">
+            <span className="text-[#34D399] text-[10px] md:text-xs font-black uppercase tracking-[0.6em] md:tracking-[0.8em] block mb-2">
+              FUEL THE FUTURE
+            </span>
           </div>
-          <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter mb-8 leading-tight">
-            Your Contribution is <br/><span className="text-emerald-400">Her Transformation</span>
+
+          <h1 className="flex flex-col items-center mb-10">
+            <span className="font-serif-footer text-5xl md:text-8xl text-white font-medium leading-[1.1] tracking-tight mb-2">
+              Your Contribution
+            </span>
+            <span className="font-script text-5xl md:text-8xl text-[#34D399] magenta-glow lowercase mt-1">
+              Changes Destinies
+            </span>
           </h1>
-          <p className="text-xl md:text-2xl text-teal-100 font-urdu max-w-3xl mx-auto leading-relaxed mb-12">
-            آپ کا عطیہ کسی مستحق خاتون کے لیے باعزت روزگار اور روشن مستقبل کی بنیاد بن سکتا ہے۔
+
+          <p className="text-gray-400 text-lg md:text-2xl font-light leading-relaxed max-w-2xl mx-auto mb-16">
+            Help us keep high-quality technical education 100% free for underprivileged women.
           </p>
+
           <button 
             onClick={() => setShowModal(true)}
-            className="px-12 py-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-[0.3em] rounded-2xl shadow-2xl transition-all active:scale-95"
+            className="group relative px-12 py-5 bg-transparent border-2 border-emerald-500 text-emerald-400 font-black uppercase text-xs tracking-[0.3em] rounded-2xl transition-all hover:bg-emerald-500 hover:text-white shadow-[0_0_20px_rgba(52,211,153,0.1)] active:scale-95"
           >
-            Donate to the Cause
+            <span className="relative z-10 flex items-center gap-2">
+              Donate to the Cause <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </span>
           </button>
         </div>
       </section>
 
-      {/* Impact Section */}
-      <section className="py-24 max-w-7xl mx-auto px-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {donationTiers.map((tier, idx) => (
-            <div 
-              key={idx} 
-              onClick={() => setShowModal(true)}
-              className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 flex flex-col items-center text-center group hover:bg-white hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-pointer active:scale-95"
-            >
-              <div className="w-20 h-20 bg-white rounded-[2rem] flex items-center justify-center shadow-lg mb-8 group-hover:scale-110 transition-transform">
-                <Coins className="w-10 h-10 text-emerald-600" />
-              </div>
-              <h3 className="text-3xl font-black text-slate-900 mb-2">{tier.amount} PKR</h3>
-              <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-6">{tier.label}</p>
-              <p className="text-slate-500 text-sm leading-relaxed italic mb-8">"{tier.desc}"</p>
-              <div className="mt-auto flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 group-hover:gap-4 transition-all">
-                Contribute Now <ArrowRight className="w-4 h-4" />
-              </div>
-            </div>
-          ))}
+      {/* Urdu Philosophy Section */}
+      <section className="bg-white py-16 border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <div className="inline-block px-8 py-6 bg-slate-50 rounded-[2.5rem] border border-slate-100">
+            <p className="text-3xl md:text-5xl font-urdu text-teal-950 leading-loose">
+              آپ کا عطیہ کسی مستحق خاتون کے لیے باعزت روزگار اور روشن مستقبل کی بنیاد بن سکتا ہے۔
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Philosophy Section */}
-      <section className="py-24 bg-teal-50/50 border-y border-teal-100">
-        <div className="max-w-5xl mx-auto px-4 text-center space-y-12">
-           <h2 className="text-xs font-black text-teal-600 uppercase tracking-[0.5em]">The Ripple Effect</h2>
-           <p className="text-3xl md:text-4xl font-black text-teal-900 leading-tight">
-             "At Akbar Khan Institute, we don't just provide charity; we provide dignity. By supporting our institutional infrastructure, you ensure that every student has access to the best machinery and digital tools."
-           </p>
-           <div className="flex items-center justify-center gap-8 pt-8">
-             <div className="flex flex-col items-center">
-               <ShieldCheck className="w-10 h-10 text-teal-800 mb-2" />
-               <span className="text-[10px] font-black uppercase text-slate-400">100% Transparency</span>
-             </div>
-             <div className="flex flex-col items-center">
-               <Users className="w-10 h-10 text-teal-800 mb-2" />
-               <span className="text-[10px] font-black uppercase text-slate-400">Verified Impact</span>
-             </div>
+      {/* Impact Section */}
+      <section className="py-24 md:py-32 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+              <div className="space-y-8 animate-fadeIn text-left">
+                 <span className="text-[#BE185D] text-[10px] md:text-xs font-black uppercase tracking-[0.5em] block mb-2">
+                    OUR IMPACT
+                 </span>
+                 <h2 className="flex flex-col text-5xl md:text-7xl font-outfit font-black text-[#0B1121] leading-[0.9] tracking-tighter">
+                    The Future You 
+                    <span className="font-script text-[#BE185D] italic mt-2 lowercase leading-tight">Fund</span>
+                 </h2>
+                 <p className="text-slate-500 text-lg md:text-2xl font-light leading-relaxed max-w-xl">
+                    Every contribution directly funds the high-tech equipment and specialized trainers required to keep our institute the best in the region.
+                 </p>
+                 <div className="pt-6">
+                   <button 
+                    onClick={() => setShowModal(true)}
+                    className="px-10 py-5 bg-[#0B1121] text-white font-black uppercase text-[11px] md:text-xs tracking-[0.2em] rounded-full shadow-2xl hover:bg-black transition-all active:scale-95"
+                   >
+                     SUPPORT OUR MISSION
+                   </button>
+                 </div>
+              </div>
+              
+              <div className="relative">
+                 <div className="absolute -top-10 -left-10 w-40 h-40 bg-teal-50 rounded-full blur-3xl opacity-50"></div>
+                 <div className="relative rounded-[3rem] md:rounded-[5rem] overflow-hidden shadow-3xl border-8 border-white group">
+                    <img 
+                      src="https://images.unsplash.com/photo-1581092921461-7d15ce89a306?auto=format&fit=crop&q=80&w=1200" 
+                      alt="Institutional Impact" 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0B1121]/40 to-transparent"></div>
+                 </div>
+              </div>
            </div>
+        </div>
+      </section>
+
+      {/* Updated Donation Tiers Section Matching the Screenshot */}
+      <section className="py-24 bg-slate-50/30">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+             <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.4em] mb-4">Support Tiers</h2>
+             <h3 className="text-3xl md:text-5xl font-outfit font-black text-slate-900 uppercase tracking-tighter">Choose Your Impact</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+            {donationTiers.map((tier, idx) => (
+              <div 
+                key={idx} 
+                className="relative bg-[#F0FDFB] p-10 md:p-14 rounded-[3.5rem] border-2 border-[#14B8A6] flex flex-col items-center text-center shadow-xl shadow-teal-900/5 transition-all duration-500 hover:-translate-y-2"
+              >
+                {/* Visual Icon Matching Screenshot style (Emoji placeholder for building) */}
+                <div className="text-6xl mb-10 transform transition-transform group-hover:scale-110">
+                   {tier.emoji}
+                </div>
+
+                <h3 className="text-2xl md:text-3xl font-outfit font-black text-[#0B1121] mb-2">
+                  {tier.label}
+                </h3>
+                
+                <p className="font-serif-footer text-3xl md:text-4xl text-[#0D7A70] mb-8 font-medium">
+                  PKR {tier.amount}
+                </p>
+
+                <p className="text-slate-500 text-sm md:text-base leading-relaxed max-w-[220px] mb-12 font-medium">
+                  {tier.desc}
+                </p>
+
+                <button 
+                  onClick={() => setShowModal(true)}
+                  className="w-full max-w-[200px] py-4 bg-[#0D7A70] text-white font-black uppercase text-[11px] tracking-widest rounded-2xl shadow-xl shadow-teal-900/10 hover:bg-[#0A665D] transition-all active:scale-95"
+                >
+                  DONATE NOW
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Badges */}
+      <section className="py-20 bg-teal-50/30 border-y border-teal-100">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="flex flex-col items-center text-center">
+              <ShieldCheck className="w-10 h-10 text-teal-800 mb-3" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Secure Portal</span>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <Users className="w-10 h-10 text-teal-800 mb-3" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Verified NGO</span>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <Sparkles className="w-10 h-10 text-teal-800 mb-3" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Direct Impact</span>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <Heart className="w-10 h-10 text-teal-800 mb-3" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Community Built</span>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Modal Gateway */}
       {showModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setShowModal(false)}></div>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowModal(false)}></div>
           <div className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-scaleIn">
             <div className="bg-teal-900 p-8 text-white relative">
               <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
@@ -127,7 +230,7 @@ const Donate: React.FC = () => {
               </div>
               
               <div className="pt-6 text-center">
-                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">A project of Akbar Khan Foundation</p>
+                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">A project of Akbar Khan Institute</p>
               </div>
             </div>
           </div>
@@ -141,6 +244,13 @@ const Donate: React.FC = () => {
         }
         .animate-scaleIn {
           animation: scaleIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
       `}</style>
     </div>

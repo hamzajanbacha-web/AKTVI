@@ -1,18 +1,29 @@
 
 import React from 'react';
+import { SessionSchedule } from '../types';
 
-const NotificationTicker: React.FC = () => {
+interface NotificationTickerProps {
+  liveSession: SessionSchedule | null;
+  sessionName: string;
+}
+
+const NotificationTicker: React.FC<NotificationTickerProps> = ({ liveSession, sessionName }) => {
   return (
-    <div className="bg-teal-900 text-white py-2 overflow-hidden whitespace-nowrap relative z-40 no-print shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)] border-b border-teal-800">
-      <div className="max-w-7xl mx-auto overflow-hidden px-4">
-        <div className="animate-marquee inline-block">
-          <span className="mx-8 text-[11px] font-bold uppercase tracking-widest text-teal-100/90">Free Admissions 2024 are now OPEN for underprivileged women!</span>
-          <span className="mx-8 text-sm font-medium text-emerald-400">•</span>
-          <span className="mx-8 text-[11px] font-bold uppercase tracking-widest text-teal-100/90">Zero Tuition Fees for all Technical and Vocational Courses.</span>
-          <span className="mx-8 text-sm font-medium text-emerald-400">•</span>
-          <span className="mx-8 text-lg font-medium font-urdu align-middle">تعلیم اور ہنر - بالکل مفت</span>
-          <span className="mx-8 text-sm font-medium text-emerald-400">•</span>
-          <span className="mx-8 text-[11px] font-bold uppercase tracking-widest text-teal-100/90">Empowering lives through skills since inception. Visit us today!</span>
+    <div className="bg-brand-dark text-white py-2 overflow-hidden whitespace-nowrap relative z-40 no-print border-b border-brand-primary/20 shadow-inner">
+      <div className="w-full overflow-hidden">
+        <div className="animate-marquee inline-block font-outfit">
+          {liveSession && (
+            <span className="mx-12 text-[10px] md:text-[12px] font-black uppercase tracking-[0.15em] text-white">
+              <span className="bg-brand-accent px-3 py-1 rounded-md animate-pulse mr-3 shadow-[0_0_20px_#BE185D]">LIVE NOW</span>
+              {sessionName}: {liveSession.topic} • 
+            </span>
+          )}
+          <span className="mx-12 text-[10px] md:text-[12px] font-bold uppercase tracking-[0.15em] text-white/90">
+             ANNOUNCEMENT: <span className="text-white bg-brand-accent px-3 py-0.5 rounded-md shadow-[0_0_15px_#BE185D66]">ADMISSIONS OPEN</span> FOR FALL 2024 • 100% FREE TECHNICAL EDUCATION FOR WOMEN • 
+          </span>
+          <span className="mx-12 text-[10px] md:text-[12px] font-bold uppercase tracking-[0.15em] text-white/90">
+             ANNOUNCEMENT: <span className="text-white bg-brand-accent px-3 py-0.5 rounded-md shadow-[0_0_15px_#BE185D66]">ADMISSIONS OPEN</span> FOR FALL 2024 • 100% FREE TECHNICAL EDUCATION FOR WOMEN • 
+          </span>
         </div>
       </div>
       <style>{`
