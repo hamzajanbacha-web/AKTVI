@@ -16,8 +16,14 @@ import {
   Wifi, Signal, Link, Calendar, Clock, Pipette, Image as ImageIcon, Radio
 } from 'lucide-react';
 
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize Gemini safely
+const getAI = () => {
+  const key = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  return new GoogleGenAI({ apiKey: key });
+};
+
+const ai = getAI();
 
 // --- GEMINI AI TUTOR MODULE ---
 const GeminiTutor: React.FC<{ course?: Course }> = ({ course }) => {
@@ -32,6 +38,10 @@ const GeminiTutor: React.FC<{ course?: Course }> = ({ course }) => {
     setResponse('');
     
     try {
+      if (!ai) {
+        setResponse("AI Tutor is currently offline. Please check system configuration.");
+        return;
+      }
       const result = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `You are an expert tutor at Akbar Khan Technical Institute. 
