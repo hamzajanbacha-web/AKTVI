@@ -265,16 +265,32 @@ const App: React.FC = () => {
       dob: data.dob
     }).select().single();
 
-    if (userErr) return;
+    if (userErr) {
+      console.error("Error creating instructor user:", userErr);
+      return;
+    }
+    
     await supabase.from('instructors').insert({
       user_id: user.id,
       name: data.name,
       qualification: data.qualification,
       subject: data.subject,
       class_assignment: data.classAssignment,
-      image: 'https://picsum.photos/seed/faculty/200/200'
+      image: data.image || 'https://picsum.photos/seed/faculty/200/200'
     });
     await refreshData();
+  };
+
+  const handleUpdateInstructor = async (id: string, data: any) => {
+    const { error } = await supabase.from('instructors').update({
+      name: data.name,
+      qualification: data.qualification,
+      subject: data.subject,
+      class_assignment: data.classAssignment,
+      image: data.image
+    }).eq('id', id);
+    
+    if (!error) await refreshData();
   };
 
   const handleRemoveInstructor = async (id: string) => {
@@ -414,6 +430,7 @@ const App: React.FC = () => {
             onUpdateAdmission={handleUpdateAdmission} 
             onUpdateRegisterStatus={handleUpdateRegisterStatus} 
             onAddInstructor={handleAddInstructor} 
+            onUpdateInstructor={handleUpdateInstructor}
             onRemoveInstructor={handleRemoveInstructor} 
             onAddResult={handleAddResult} 
             onRemoveResult={handleRemoveResult} 

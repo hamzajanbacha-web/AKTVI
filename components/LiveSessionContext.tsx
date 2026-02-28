@@ -22,6 +22,7 @@ interface LiveSessionContextType {
   activeStream: MediaStream | null;
   screenStream: MediaStream | null;
   mediaUrl: string | null;
+  mediaType: 'video' | 'image' | null;
   isMuted: boolean;
   isCameraOff: boolean;
   isTorchOn: boolean;
@@ -50,6 +51,7 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'video' | 'image' | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isTorchOn, setIsTorchOn] = useState(false);
@@ -160,6 +162,7 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
     setScreenStream(null);
     if (mediaUrl) URL.revokeObjectURL(mediaUrl);
     setMediaUrl(null);
+    setMediaType(null);
     setSessionMode('idle');
     setIsMuted(false);
     setIsCameraOff(false);
@@ -213,13 +216,15 @@ export const LiveSessionProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const playMediaFile = (file: File) => {
     if (mediaUrl) URL.revokeObjectURL(mediaUrl);
-    setMediaUrl(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    setMediaUrl(url);
+    setMediaType(file.type.startsWith('image/') ? 'image' : 'video');
     setSessionMode('media');
   };
 
   return (
     <LiveSessionContext.Provider value={{
-      sessionMode, activeStream, screenStream, mediaUrl, isMuted, isCameraOff, isTorchOn, 
+      sessionMode, activeStream, screenStream, mediaUrl, mediaType, isMuted, isCameraOff, isTorchOn, 
       zoomLevel, imageSettings, chromaKey,
       startCamera, stopCamera, cycleCamera, toggleTorch, startScreenShare, playMediaFile, 
       terminateSession, toggleMute, toggleCamera, setZoom, updateImageSettings, toggleChromaKey,

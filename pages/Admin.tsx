@@ -25,6 +25,7 @@ interface AdminProps {
   onUpdateAdmission: (id: string, status: AdmissionStatus, remarks?: string) => Promise<void>;
   onUpdateRegisterStatus: (id: string, status: string) => Promise<void>; 
   onAddInstructor: (instructorData: any) => Promise<void>;
+  onUpdateInstructor: (id: string, instructorData: any) => Promise<void>;
   onRemoveInstructor: (id: string) => Promise<void>;
   onAddResult: (result: Partial<ExamResult>) => Promise<void>;
   onRemoveResult: (id: string) => Promise<void>;
@@ -38,7 +39,7 @@ interface AdminProps {
 const Admin: React.FC<AdminProps> = ({ 
   courses, admissions, instructors, admissionWithdrawal = [], results, alerts = [],
   onAddCourse, onRemoveCourse, onUpdateAdmission, onUpdateRegisterStatus,
-  onAddInstructor, onRemoveInstructor, onAddResult, onRemoveResult,
+  onAddInstructor, onUpdateInstructor, onRemoveInstructor, onAddResult, onRemoveResult,
   onAddAlert, onRemoveAlert,
   onRefreshData
 }) => {
@@ -51,7 +52,7 @@ const Admin: React.FC<AdminProps> = ({
 
   // Local Form States
   const [courseForm, setCourseForm] = useState<Partial<Course>>({ name: '', instructorName: '', thumbnail: '', duration: '', status: 'Active', mode: 'ON CAMPUS', description: '', price: 0, isPremium: false, previewVideoUrl: '' });
-  const [facultyForm, setFacultyForm] = useState({ name: '', username: '', password: '', email: '', qualification: '', subject: '', assignment: '' });
+  const [facultyForm, setFacultyForm] = useState({ name: '', username: '', password: '', email: '', qualification: '', subject: '', assignment: '', image: '' });
   const [resultForm, setResultForm] = useState<Partial<ExamResult>>({ studentId: '', examType: 'Final Exam', paperTotal: 100, paperObtained: 0, practicalTotal: 50, practicalObtained: 0, remarks: '' });
   const [scheduleForm, setScheduleForm] = useState({ courseId: '', topic: '', startTime: '' });
   const [recordingForm, setRecordingForm] = useState({ courseId: '', topic: '', videoUrl: '', thumbnailUrl: '' });
@@ -99,11 +100,18 @@ const Admin: React.FC<AdminProps> = ({
   const handleFacultySubmit = async () => {
     setIsSyncing(true);
     try {
-      await onAddInstructor({
-        ...facultyForm,
-        classAssignment: facultyForm.assignment,
-        dob: '2000-01-01'
-      });
+      if (selectedItem) {
+        await onUpdateInstructor(selectedItem.id, {
+          ...facultyForm,
+          classAssignment: facultyForm.assignment
+        });
+      } else {
+        await onAddInstructor({
+          ...facultyForm,
+          classAssignment: facultyForm.assignment,
+          dob: '2000-01-01'
+        });
+      }
       setModalType(null);
       onRefreshData();
     } finally {
@@ -468,7 +476,25 @@ const Admin: React.FC<AdminProps> = ({
                             <td className="p-8 font-inter text-xs text-slate-500 font-medium">{inst.class_assignment}</td>
                             <td className="p-8 text-right">
                               <div className="flex justify-end gap-3">
-                                <button className="p-2.5 bg-slate-100 rounded-xl text-slate-400 hover:text-teal-900"><Edit3 className="w-4 h-4" /></button>
+                                <button 
+                                  onClick={() => {
+                                    setSelectedItem(inst);
+                                    setFacultyForm({
+                                      name: inst.name,
+                                      username: '', // Username/Password not editable here
+                                      password: '',
+                                      email: '',
+                                      qualification: inst.qualification,
+                                      subject: inst.subject,
+                                      assignment: inst.class_assignment,
+                                      image: inst.image
+                                    });
+                                    setModalType('faculty');
+                                  }}
+                                  className="p-2.5 bg-slate-100 rounded-xl text-slate-400 hover:text-teal-900"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
                                 <button onClick={() => onRemoveInstructor(inst.id)} className="p-2.5 bg-slate-100 rounded-xl text-slate-400 hover:text-rose-600"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             </td>
@@ -663,7 +689,32 @@ const Admin: React.FC<AdminProps> = ({
                          <div className="space-y-2"><label className={typeLabel}>Course Name</label><input type="text" value={courseForm.name} onChange={e => setCourseForm({...courseForm, name: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
                          <div className="space-y-2"><label className={typeLabel}>Instructor</label><input type="text" value={courseForm.instructorName} onChange={e => setCourseForm({...courseForm, instructorName: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
                       </div>
-                      <div className="space-y-2"><label className={typeLabel}>Course Thumbnail URL</label><input type="text" value={courseForm.thumbnail} onChange={e => setCourseForm({...courseForm, thumbnail: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" placeholder="https://images.unsplash.com/..." /></div>
+                                             <div className="space-y-2">
+                         <label className={typeLabel}>Course Thumbnail URL / Upload</label>
+                         <div className="flex gap-4">
+                           <input type="text" value={courseForm.thumbnail} onChange={e => setCourseForm({...courseForm, thumbnail: e.target.value})} className="flex-grow p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs" placeholder="https://images.unsplash.com/..." />
+                           <input 
+                             type="file" 
+                             accept="image/*" 
+                             onChange={async (e) => {
+                               const file = e.target.files?.[0];
+                               if (file) {
+                                 try {
+                                   const { uploadFile } = await import('../lib/supabase');
+                                   const url = await uploadFile('images', file);
+                                   setCourseForm({...courseForm, thumbnail: url});
+                                 } catch (err: any) {
+                                   alert("Upload failed: " + err.message);
+                                 }
+                               }
+                             }} 
+                             className="hidden" 
+                             id="course-thumbnail-upload" 
+                           />
+                           <label htmlFor="course-thumbnail-upload" className="px-6 py-4 bg-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-200 transition-all flex items-center">Upload</label>
+                         </div>
+                       </div>
+
                       <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2"><label className={typeLabel}>Duration</label><input type="text" value={courseForm.duration} onChange={e => setCourseForm({...courseForm, duration: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
                          <div className="space-y-2"><label className={typeLabel}>Status</label>
@@ -724,10 +775,41 @@ const Admin: React.FC<AdminProps> = ({
                  {modalType === 'faculty' && (
                    <div className="space-y-6">
                       <div className="space-y-2"><label className={typeLabel}>Full Name</label><input type="text" value={facultyForm.name} onChange={e => setFacultyForm({...facultyForm, name: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
-                      <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-2"><label className={typeLabel}>Username</label><input type="text" value={facultyForm.username} onChange={e => setFacultyForm({...facultyForm, username: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
-                         <div className="space-y-2"><label className={typeLabel}>Password</label><input type="text" value={facultyForm.password} onChange={e => setFacultyForm({...facultyForm, password: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
-                      </div>
+                       {!selectedItem && (
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2"><label className={typeLabel}>Username</label><input type="text" value={facultyForm.username} onChange={e => setFacultyForm({...facultyForm, username: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
+                            <div className="space-y-2"><label className={typeLabel}>Password</label><input type="text" value={facultyForm.password} onChange={e => setFacultyForm({...facultyForm, password: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
+                         </div>
+
+
+                       )}
+
+                       <div className="space-y-2">
+                         <label className={typeLabel}>Instructor Image URL / Upload</label>
+                         <div className="flex gap-4">
+                           <input type="text" value={facultyForm.image} onChange={e => setFacultyForm({...facultyForm, image: e.target.value})} className="flex-grow p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs" placeholder="https://..." />
+                           <input 
+                             type="file" 
+                             accept="image/*" 
+                             onChange={async (e) => {
+                               const file = e.target.files?.[0];
+                               if (file) {
+                                 try {
+                                   const { uploadFile } = await import('../lib/supabase');
+                                   const url = await uploadFile('images', file);
+                                   setFacultyForm({...facultyForm, image: url});
+                                 } catch (err: any) {
+                                   alert("Upload failed: " + err.message);
+                                 }
+                               }
+                             }} 
+                             className="hidden" 
+                             id="faculty-image-upload" 
+                           />
+                           <label htmlFor="faculty-image-upload" className="px-6 py-4 bg-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-slate-200 transition-all flex items-center">Upload</label>
+                         </div>
+                       </div>
+
                       <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                            <label className={typeLabel}>Subject / Course</label>

@@ -315,23 +315,31 @@ const StageFeed: React.FC<{
   videoRef: React.RefObject<HTMLVideoElement | null>;
   screenRef: React.RefObject<HTMLVideoElement | null>;
   mediaUrl: string | null;
+  mediaType?: 'video' | 'image' | null;
   activeStream: MediaStream | null;
   screenStream: MediaStream | null;
   isMuted: boolean;
   style?: React.CSSProperties;
   className?: string;
-}> = ({ mode, videoRef, screenRef, mediaUrl, activeStream, screenStream, isMuted, style, className }) => {
+}> = ({ mode, videoRef, screenRef, mediaUrl, mediaType, activeStream, screenStream, isMuted, style, className }) => {
   useEffect(() => {
-    if (videoRef.current && activeStream) videoRef.current.srcObject = activeStream;
+    if (videoRef.current && activeStream && mode === 'camera') videoRef.current.srcObject = activeStream;
   }, [activeStream, mode]);
 
   useEffect(() => {
-    if (screenRef.current && screenStream) screenRef.current.srcObject = screenStream;
+    if (screenRef.current && screenStream && mode === 'screen') screenRef.current.srcObject = screenStream;
   }, [screenStream, mode]);
 
-  if (mode === 'screen') return <video ref={screenRef} autoPlay playsInline className={className} />;
-  if (mode === 'media' && mediaUrl) return <video src={mediaUrl} autoPlay controls className={className} />;
-  if (mode === 'camera' && activeStream) return <video ref={videoRef} autoPlay playsInline muted={isMuted} style={style} className={className} />;
+  if (mode === 'screen') return <video ref={screenRef} autoPlay playsInline style={style} className={className} />;
+  
+  if (mode === 'media' && mediaUrl) {
+    if (mediaType === 'image') {
+      return <img src={mediaUrl} style={style} className={className + " object-contain"} referrerPolicy="no-referrer" />;
+    }
+    return <video src={mediaUrl} autoPlay controls playsInline style={style} className={className} muted={isMuted} />;
+  }
+  
+  if (mode === 'camera' && activeStream) return <video ref={videoRef} autoPlay playsInline muted style={style} className={className} />;
   
   return (
     <div className="flex flex-col items-center justify-center text-center p-10 space-y-6">
@@ -360,7 +368,7 @@ const InstitutionalClassroom: React.FC<{
 }> = ({ user, register, schedules, course, allCourses, onRefreshData, selectedRecording, onClearRecording }) => {
   const { 
     startCamera, activeStream, screenStream, isMuted, isCameraOff,
-    toggleMute, toggleCamera, startScreenShare, terminateSession, sessionMode, playMediaFile, mediaUrl,
+    toggleMute, toggleCamera, startScreenShare, terminateSession, sessionMode, playMediaFile, mediaUrl, mediaType,
     imageSettings, chromaKey
   } = useLiveSession();
   
@@ -563,7 +571,7 @@ const InstitutionalClassroom: React.FC<{
     return (
       <StageFeed 
         mode={sessionMode} videoRef={videoRef} screenRef={screenVideoRef} 
-        mediaUrl={mediaUrl} activeStream={activeStream} screenStream={screenStream} 
+        mediaUrl={mediaUrl} mediaType={mediaType} activeStream={activeStream} screenStream={screenStream} 
         isMuted={isMuted} style={filterStyle} className="w-full h-full object-cover bg-black"
       />
     );
@@ -590,7 +598,7 @@ const InstitutionalClassroom: React.FC<{
                  {isSwapped ? (
                     <StageFeed 
                        mode={sessionMode} videoRef={videoRef} screenRef={screenVideoRef} 
-                       mediaUrl={mediaUrl} activeStream={activeStream} screenStream={screenStream} 
+                       mediaUrl={mediaUrl} mediaType={mediaType} activeStream={activeStream} screenStream={screenStream} 
                        isMuted={isMuted} style={{...filterStyle, width:'100%', height:'100%', objectFit:'cover'}} className="w-full h-full"
                     />
                  ) : (
@@ -632,7 +640,7 @@ const InstitutionalClassroom: React.FC<{
                 <div className="w-[1px] h-6 bg-white/10 mx-1" />
                 <button onClick={startScreenShare} className="p-2.5 md:p-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all shadow-lg" title="Share Screen"><ScreenShare className="w-4 h-4" /></button>
                 <label className="p-2.5 md:p-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all cursor-pointer shadow-lg" title="Share Media">
-                  <PlayCircle className="w-4 h-4" /><input type="file" className="hidden" accept="video/*" onChange={e => e.target.files?.[0] && playMediaFile(e.target.files[0])} />
+                  <PlayCircle className="w-4 h-4" /><input type="file" className="hidden" accept="video/*,image/*" onChange={e => e.target.files?.[0] && playMediaFile(e.target.files[0])} />
                 </label>
                 <button onClick={startCamera} className="p-2.5 md:p-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all shadow-lg" title="Switch to Camera"><Video className="w-4 h-4" /></button>
                 <div className="w-[1px] h-6 bg-white/10 mx-1" />
