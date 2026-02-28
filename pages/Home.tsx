@@ -10,6 +10,7 @@ interface HomeProps {
   instructors: Instructor[];
   onApply: (courseId: string) => void;
   onBuy: (product: Product) => void;
+  onBuyCourse?: (courseId: string) => void;
   onExploreCourses: () => void;
   onDonateClick: () => void;
   onLoginClick: () => void;
@@ -19,6 +20,7 @@ interface HomeProps {
 const Home: React.FC<HomeProps> = ({ 
   courses, 
   onApply, 
+  onBuyCourse,
   onExploreCourses, 
   onDonateClick, 
   onLoginClick, 
@@ -124,7 +126,7 @@ const Home: React.FC<HomeProps> = ({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {courses.slice(0, 4).map(course => (
-              <CourseCard key={course.id} course={course} onApply={onApply} />
+              <CourseCard key={course.id} course={course} onApply={onApply} onBuy={onBuyCourse} />
             ))}
           </div>
         </div>
@@ -142,7 +144,7 @@ const Home: React.FC<HomeProps> = ({
                   <div>
                     <h4 className="type-label text-brand-primary mb-3 tracking-[0.3em]">Campus Address</h4>
                     <p className="text-teal-100 text-xl md:text-2xl leading-relaxed font-outfit group-hover:text-white transition-colors">
-                      2nd Floor, BAAZ PLAZA, <br/>Gujar Garhi Bypass, Mardan.
+                      2nd Floor, BAAZ PLAZA, <br/>Gujar Garhi Bypass, Charsadda chowk<br/>Mardan, KP, Pakistan.
                     </p>
                   </div>
                 </a>

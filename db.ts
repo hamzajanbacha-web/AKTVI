@@ -4,18 +4,19 @@ import { Course, Product, User, AdmissionForm, Instructor, ExamResult, Attendanc
 
 // Helper to map DB User to Frontend User
 export const mapUser = (dbUser: any, courseId?: string): User => ({
-  id: dbUser.id.toString(),
-  username: dbUser.username,
-  firstName: dbUser.first_name,
-  lastName: dbUser.last_name,
-  password: dbUser.password,
-  dob: dbUser.dob,
-  role: dbUser.role,
-  email: dbUser.email,
-  regNumber: dbUser.reg_number,
-  courseId: courseId, // Point 6: Attached courseId
-  points: dbUser.points,
-  badges: dbUser.badges || []
+  id: dbUser.id?.toString() || '',
+  username: dbUser.username || '',
+  firstName: dbUser.first_name || dbUser.firstName || '',
+  lastName: dbUser.last_name || dbUser.lastName || '',
+  password: dbUser.password || '',
+  dob: dbUser.dob || '',
+  role: dbUser.role || 'student',
+  email: dbUser.email || '',
+  regNumber: dbUser.reg_number || dbUser.regNumber || '',
+  courseId: courseId || dbUser.courseId, 
+  points: dbUser.points || 0,
+  badges: dbUser.badges || [],
+  purchasedCourses: dbUser.purchased_courses || []
 });
 
 // Helper to map DB Admission to Frontend Admission
@@ -53,7 +54,10 @@ export const mapCourse = (dbCourse: any): Course => ({
   duration: dbCourse.duration,
   status: dbCourse.status,
   mode: dbCourse.mode,
-  category: dbCourse.category
+  category: dbCourse.category,
+  price: dbCourse.price || 0,
+  isPremium: dbCourse.is_premium || false,
+  previewVideoUrl: dbCourse.preview_video_url || ''
 });
 
 export const getDB = async () => {
@@ -97,7 +101,8 @@ export const getDB = async () => {
   const rawCurrentUser = JSON.parse(localStorage.getItem('ak_user') || 'null');
   let currentUser = null;
   if (rawCurrentUser) {
-     const regEntry = registerData.find(r => r.reg_number === rawCurrentUser.reg_number);
+     const userRegNumber = rawCurrentUser.reg_number || rawCurrentUser.regNumber;
+     const regEntry = registerData.find(r => r.reg_number === userRegNumber);
      currentUser = mapUser(rawCurrentUser, regEntry?.course_id?.toString());
   }
 
@@ -105,7 +110,20 @@ export const getDB = async () => {
     courses: (coursesRes.data || []).map(mapCourse), 
     products: (productsRes.data || []).map(p => ({ ...p, id: p.id.toString(), stockStatus: p.stock_status, isFeatured: p.is_featured, category: p.category })), 
     admissions: (admissionsRes.data || []).map(mapAdmission), 
-    register: registerData.map(r => ({ ...r, id: r.id.toString(), admission_id: r.admission_id?.toString(), course_id: r.course_id?.toString() })),
+    register: registerData.map(r => ({ 
+      id: r.id.toString(), 
+      admissionId: r.admission_id?.toString(), 
+      enrollmentSerial: r.enrollment_serial,
+      regNumber: r.reg_number,
+      studentName: r.student_name,
+      cnic: r.cnic,
+      courseId: r.course_id?.toString(), 
+      admissionDate: r.admission_date,
+      withdrawalDate: r.withdrawal_date,
+      status: r.status,
+      remarks: r.remarks,
+      photo: r.photo
+    })),
     currentUser: currentUser, 
     results: (resultsRes.data || []).map(r => ({ ...r, id: r.id.toString() })), 
     schedules: (schedulesRes.data || []).map(s => ({ ...s, id: s.id.toString(), courseId: s.course_id?.toString() })), 

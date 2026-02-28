@@ -13,7 +13,7 @@ import {
   Ghost, Download, FileText, CheckCircle2, ChevronRight, Layout,
   Loader2, Sparkles, BrainCircuit, HelpCircle, X, Sliders, Palette, Wand2,
   Camera, Volume2, VolumeX, User as UserIcon, ShieldAlert, ShieldCheck, Activity,
-  Wifi, Signal, Link, Calendar, Clock, Pipette, Image as ImageIcon, Radio
+  Wifi, Signal, Link, Calendar, Clock, Pipette, Image as ImageIcon, Radio, XCircle
 } from 'lucide-react';
 
 // Initialize Gemini safely
@@ -355,7 +355,9 @@ const InstitutionalClassroom: React.FC<{
   course?: Course;
   allCourses: Course[];
   onRefreshData: () => Promise<void>;
-}> = ({ user, register, schedules, course, allCourses, onRefreshData }) => {
+  selectedRecording?: SessionSchedule | null;
+  onClearRecording?: () => void;
+}> = ({ user, register, schedules, course, allCourses, onRefreshData, selectedRecording, onClearRecording }) => {
   const { 
     startCamera, activeStream, screenStream, isMuted, isCameraOff,
     toggleMute, toggleCamera, startScreenShare, terminateSession, sessionMode, playMediaFile, mediaUrl,
@@ -487,6 +489,26 @@ const InstitutionalClassroom: React.FC<{
   }, [activeSession, allCourses, course]);
 
   const renderPrimaryContent = () => {
+    if (selectedRecording) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-black relative">
+          <video 
+            src={selectedRecording.video_url} 
+            controls 
+            autoPlay 
+            className="w-full h-full object-cover"
+            poster={selectedRecording.thumbnail_url}
+          />
+          <button 
+            onClick={onClearRecording}
+            className="absolute top-4 left-4 p-3 bg-black/50 text-white rounded-xl hover:bg-black/80 transition-all z-50 flex items-center gap-2 text-xs font-bold uppercase tracking-widest"
+          >
+            <XCircle className="w-4 h-4" /> Close Recording
+          </button>
+        </div>
+      );
+    }
+
     const isActive = sessionMode !== 'idle' || isLiveNow;
     if (!isActive) {
       return (
@@ -542,7 +564,7 @@ const InstitutionalClassroom: React.FC<{
       <StageFeed 
         mode={sessionMode} videoRef={videoRef} screenRef={screenVideoRef} 
         mediaUrl={mediaUrl} activeStream={activeStream} screenStream={screenStream} 
-        isMuted={isMuted} style={filterStyle} className="w-full h-full object-contain bg-black"
+        isMuted={isMuted} style={filterStyle} className="w-full h-full object-cover bg-black"
       />
     );
   };
@@ -700,9 +722,13 @@ const InstitutionalClassroom: React.FC<{
 };
 
 // --- PROFILE / DASHBOARD VIEW ---
-const StudentsCornerView: React.FC<{ user: User; dbData: any }> = ({ user, dbData }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'curriculum' | 'ai' | 'resources'>('overview');
-  const currentCourse = useMemo(() => dbData.courses.find((c: Course) => c.id.toString() === user.courseId?.toString()), [dbData.courses, user.courseId]);
+const StudentsCornerView: React.FC<{ user: User; dbData: any; onPlayRecording: (recording: SessionSchedule) => void; selectedCourseId: string | null }> = ({ user, dbData, onPlayRecording, selectedCourseId }) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'curriculum' | 'ai' | 'resources' | 'recordings'>('overview');
+  const currentCourse = useMemo(() => dbData.courses.find((c: Course) => c.id.toString() === selectedCourseId?.toString()), [dbData.courses, selectedCourseId]);
+
+  const recordings = useMemo(() => {
+    return dbData.schedules.filter((s: SessionSchedule) => s.status === 'Completed' && s.video_url && s.courseId?.toString() === selectedCourseId?.toString());
+  }, [dbData.schedules, selectedCourseId]);
 
   return (
     <div className="flex flex-col h-full bg-white font-inter overflow-hidden">
@@ -711,7 +737,8 @@ const StudentsCornerView: React.FC<{ user: User; dbData: any }> = ({ user, dbDat
             { id: 'overview', label: 'Overview', icon: <Layout className="w-4 h-4" /> },
             { id: 'curriculum', label: 'Curriculum', icon: <BookOpen className="w-4 h-4" /> },
             { id: 'ai', label: 'AI Tutor', icon: <Sparkles className="w-4 h-4" /> },
-            { id: 'resources', label: 'Library', icon: <FileText className="w-4 h-4" /> }
+            { id: 'resources', label: 'Library', icon: <FileText className="w-4 h-4" /> },
+            { id: 'recordings', label: 'Recorded Lectures', icon: <Video className="w-4 h-4" /> }
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-teal-900 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:text-teal-900'}`}>
               {tab.icon} {tab.label}
@@ -791,6 +818,42 @@ const StudentsCornerView: React.FC<{ user: User; dbData: any }> = ({ user, dbDat
                </div>
             </div>
           )}
+          {activeTab === 'recordings' && (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
+               {recordings.length === 0 ? (
+                 <div className="text-center py-20 bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                   <Video className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                   <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">No Recordings Available</h3>
+                   <p className="text-xs font-bold text-slate-400 mt-2">Past sessions will appear here.</p>
+                 </div>
+               ) : (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {recordings.map((rec) => (
+                     <div key={rec.id} onClick={() => onPlayRecording(rec)} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden group cursor-pointer hover:border-teal-500 hover:shadow-xl transition-all">
+                       <div className="aspect-video bg-slate-100 relative overflow-hidden">
+                         {rec.thumbnail_url ? (
+                           <img src={rec.thumbnail_url} alt={rec.topic} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                         ) : (
+                           <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                             <Video className="w-12 h-12 text-slate-600" />
+                           </div>
+                         )}
+                         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                           <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100">
+                             <PlayCircle className="w-6 h-6 text-white" />
+                           </div>
+                         </div>
+                       </div>
+                       <div className="p-6">
+                         <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-2">{new Date(rec.startTime).toLocaleDateString()}</p>
+                         <h4 className="text-lg font-black text-slate-900 leading-tight">{rec.topic}</h4>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               )}
+            </div>
+          )}
        </div>
     </div>
   );
@@ -799,19 +862,41 @@ const StudentsCornerView: React.FC<{ user: User; dbData: any }> = ({ user, dbDat
 // --- MAIN LMS COMPONENT ---
 const LMS: React.FC<{ externalUser: User | null; onLogout: () => void; onPageChange: (p: string) => void; onRefreshData: () => Promise<void>; onLoginClick: () => void; dbData: any; }> = ({ externalUser, onRefreshData, onLoginClick, dbData }) => {
   const [activeStage, setActiveStage] = useState<'classroom' | 'corner'>('classroom');
+  const [selectedRecording, setSelectedRecording] = useState<SessionSchedule | null>(null);
   const effectiveUser = externalUser;
+  
   const isAuthorized = useMemo(() => {
     if (!effectiveUser) return false;
     if (effectiveUser.role === 'admin' || effectiveUser.role === 'instructor') return true;
+    if (effectiveUser.purchasedCourses && effectiveUser.purchasedCourses.length > 0) return true;
     const reg = dbData.register.find((r: AdmissionWithdrawal) => r.regNumber === effectiveUser.regNumber);
     return !!(reg && (reg.status === 'Active' || reg.status === 'Approved') && reg.courseId);
   }, [effectiveUser, dbData.register]);
+
+  const availableCourseIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (effectiveUser?.courseId) ids.add(effectiveUser.courseId);
+    if (effectiveUser?.purchasedCourses) {
+      effectiveUser.purchasedCourses.forEach(id => ids.add(id));
+    }
+    return Array.from(ids);
+  }, [effectiveUser]);
+
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(availableCourseIds[0] || null);
+
+  useEffect(() => {
+    if (!selectedCourseId && availableCourseIds.length > 0) {
+      setSelectedCourseId(availableCourseIds[0]);
+    }
+  }, [availableCourseIds, selectedCourseId]);
+
   const filteredRegister = useMemo(() => {
     if (!effectiveUser) return [];
     if (effectiveUser.role === 'admin') return dbData.register;
-    return dbData.register.filter((r: AdmissionWithdrawal) => r.courseId?.toString() === effectiveUser.courseId?.toString());
-  }, [effectiveUser, dbData.register]);
-  const currentCourse = useMemo(() => dbData.courses.find((c: Course) => c.id.toString() === effectiveUser?.courseId?.toString()), [dbData.courses, effectiveUser?.courseId]);
+    return dbData.register.filter((r: AdmissionWithdrawal) => r.courseId?.toString() === selectedCourseId?.toString());
+  }, [effectiveUser, dbData.register, selectedCourseId]);
+
+  const currentCourse = useMemo(() => dbData.courses.find((c: Course) => c.id.toString() === selectedCourseId?.toString()), [dbData.courses, selectedCourseId]);
 
   if (!effectiveUser) {
     return (
@@ -841,14 +926,26 @@ const LMS: React.FC<{ externalUser: User | null; onLogout: () => void; onPageCha
 
   return (
     <div className="bg-white flex flex-col font-inter min-h-screen">
-      <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center justify-center shadow-sm no-print shrink-0 sticky top-0 z-40">
+      <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center justify-between shadow-sm no-print shrink-0 sticky top-0 z-40">
          <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 gap-2">
             <button onClick={() => setActiveStage('classroom')} className={`flex items-center gap-3 px-8 py-2.5 rounded-xl transition-all text-[9px] font-black uppercase tracking-widest ${activeStage === 'classroom' ? 'bg-teal-900 text-white shadow-lg' : 'text-slate-400 hover:text-teal-900'}`}><Monitor className="w-4 h-4" /> Academic Stage</button>
             <button onClick={() => setActiveStage('corner')} className={`flex items-center gap-3 px-8 py-2.5 rounded-xl transition-all text-[9px] font-black uppercase tracking-widest ${activeStage === 'corner' ? 'bg-teal-900 text-white shadow-lg' : 'text-slate-400 hover:text-teal-900'}`}><GraduationCap className="w-4 h-4" /> Module Content</button>
          </div>
+         {availableCourseIds.length > 1 && (
+           <select 
+             value={selectedCourseId || ''} 
+             onChange={(e) => setSelectedCourseId(e.target.value)}
+             className="bg-slate-50 border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+           >
+             {availableCourseIds.map(id => {
+               const c = dbData.courses.find((course: Course) => course.id.toString() === id.toString());
+               return <option key={id} value={id}>{c?.name || 'Unknown Course'}</option>;
+             })}
+           </select>
+         )}
       </div>
       <main className="flex-grow bg-slate-50/50 relative">
-         {activeStage === 'classroom' ? <InstitutionalClassroom user={effectiveUser} register={filteredRegister} schedules={dbData.schedules} course={currentCourse} allCourses={dbData.courses} onRefreshData={onRefreshData} /> : <StudentsCornerView user={effectiveUser} dbData={dbData} />}
+         {activeStage === 'classroom' ? <InstitutionalClassroom user={effectiveUser} register={filteredRegister} schedules={dbData.schedules} course={currentCourse} allCourses={dbData.courses} onRefreshData={onRefreshData} selectedRecording={selectedRecording} onClearRecording={() => setSelectedRecording(null)} /> : <StudentsCornerView user={effectiveUser} dbData={dbData} onPlayRecording={(recording) => { setSelectedRecording(recording); setActiveStage('classroom'); }} selectedCourseId={selectedCourseId} />}
       </main>
     </div>
   );

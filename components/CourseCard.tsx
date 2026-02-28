@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
 import { Course } from '../types';
-import { Clock, MapPin, Globe, CheckCircle, Heart } from 'lucide-react';
+import { Clock, MapPin, Globe, CheckCircle, Heart, Lock, PlayCircle } from 'lucide-react';
 
 interface CourseCardProps {
   course: Course;
   onApply: (courseId: string) => void;
+  onBuy?: (courseId: string) => void;
 }
 
-const CourseCard: React.FC<CourseCardProps> = ({ course, onApply }) => {
+const CourseCard: React.FC<CourseCardProps> = ({ course, onApply, onBuy }) => {
   const [showDescription, setShowDescription] = useState(false);
 
   const statusColors = {
@@ -18,7 +19,9 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onApply }) => {
     Postponed: 'bg-red-100 text-red-700',
     active: 'bg-green-100 text-green-700',
     scheduled: 'bg-blue-100 text-blue-700',
-    frozen: 'bg-slate-100 text-slate-700'
+    frozen: 'bg-slate-100 text-slate-700',
+    Live: 'bg-rose-100 text-rose-700',
+    Discarded: 'bg-slate-100 text-slate-700'
   };
 
   return (
@@ -34,12 +37,18 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onApply }) => {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
-           <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${statusColors[course.status as keyof typeof statusColors]}`}>
+           <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${statusColors[course.status as keyof typeof statusColors] || 'bg-slate-100 text-slate-700'}`}>
             {course.status}
           </span>
-          <span className="bg-emerald-600 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase flex items-center gap-1 shadow-lg">
-            <Heart className="w-2.5 h-2.5 fill-white" /> 100% FREE
-          </span>
+          {course.isPremium ? (
+            <span className="bg-amber-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase flex items-center gap-1 shadow-lg">
+              <Lock className="w-2.5 h-2.5 fill-white" /> PREMIUM - PKR {course.price}
+            </span>
+          ) : (
+            <span className="bg-emerald-600 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase flex items-center gap-1 shadow-lg">
+              <Heart className="w-2.5 h-2.5 fill-white" /> 100% FREE
+            </span>
+          )}
         </div>
         
         <div className="absolute -bottom-6 right-4 w-12 h-16 rounded-full border-4 border-white bg-white overflow-hidden shadow-lg">
@@ -60,12 +69,21 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onApply }) => {
            </div>
         </div>
 
-        <button 
-          onClick={(e) => { e.stopPropagation(); onApply(course.id); }}
-          className="w-full py-3 bg-teal-800 text-white rounded-xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-teal-950 transition-all shadow-sm"
-        >
-          Enroll for Free
-        </button>
+        {course.isPremium ? (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onBuy && onBuy(course.id); }}
+            className="w-full py-3 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-amber-600 transition-all shadow-sm"
+          >
+            Buy Now
+          </button>
+        ) : (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onApply(course.id); }}
+            className="w-full py-3 bg-teal-800 text-white rounded-xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-teal-950 transition-all shadow-sm"
+          >
+            Enroll for Free
+          </button>
+        )}
       </div>
 
       {showDescription && (
@@ -73,7 +91,12 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onApply }) => {
            <div className="mb-4 px-3 py-1 bg-emerald-500 text-white text-[9px] font-black rounded-full uppercase inline-block self-start tracking-widest">Syllabus Overview</div>
            <h4 className="text-xl font-outfit font-black mb-3 uppercase tracking-tight">{course.name}</h4>
            <p className="text-sm font-inter leading-relaxed mb-6 opacity-90 line-clamp-4">{course.description}</p>
-           <div className="h-1 w-12 bg-emerald-400 rounded-full"></div>
+           {course.isPremium && course.previewVideoUrl && (
+              <a href={course.previewVideoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors mt-2">
+                <PlayCircle className="w-4 h-4" /> Watch Preview
+              </a>
+           )}
+           <div className="h-1 w-12 bg-emerald-400 rounded-full mt-4"></div>
         </div>
       )}
     </div>

@@ -21,6 +21,9 @@ export interface Course {
   category?: string;
   modules?: CourseModule[];
   resources?: InstitutionalResource[];
+  price?: number;
+  isPremium?: boolean;
+  previewVideoUrl?: string;
 }
 
 export interface CourseModule {
@@ -63,6 +66,16 @@ export interface User {
   courseId?: string; 
   points?: number;
   badges?: string[];
+  purchasedCourses?: string[];
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  courseId: string;
+  amount: number;
+  status: 'Completed' | 'Pending' | 'Failed';
+  date: string;
 }
 
 export interface AdmissionForm {
@@ -135,6 +148,8 @@ export interface SessionSchedule {
   topic: string;
   startTime: string;
   status: ScheduleStatus;
+  video_url?: string;
+  thumbnail_url?: string;
 }
 
 export interface Instructor {

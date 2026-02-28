@@ -81,6 +81,17 @@ const App: React.FC = () => {
 
   useEffect(() => {
     refreshData();
+
+    const channel = supabase
+      .channel('public:session_schedules')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'session_schedules' }, () => {
+        refreshData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const activeOrNextSession = useMemo(() => {
@@ -143,12 +154,15 @@ const App: React.FC = () => {
         
         if (shouldEnd) {
           try {
-            await supabase
-              .from('session_schedules')
-              .update({ status: 'Completed' })
-              .eq('id', parseInt(activeSession.id));
-            
-            terminateSession();
+            const numericId = parseInt(activeSession.id);
+            if (!isNaN(numericId)) {
+                await supabase
+                  .from('session_schedules')
+                  .update({ status: 'Completed' })
+                  .eq('id', numericId);
+                
+                terminateSession();
+            }
           } catch (err) {
             console.error("Failed to end session on logout", err);
           }
@@ -306,6 +320,31 @@ const App: React.FC = () => {
     if (!error) await refreshData();
   };
 
+  const handleBuyCourse = async (courseId: string) => {
+    if (!currentUser) {
+      handleLoginTrigger();
+      return;
+    }
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+
+    if (confirm(`Purchase ${course.name} for PKR ${course.price}?`)) {
+      // Simulate payment processing
+      const newPurchasedCourses = [...(currentUser.purchasedCourses || []), courseId];
+      
+      const { error } = await supabase.from('users_table').update({
+        purchased_courses: newPurchasedCourses
+      }).eq('id', currentUser.id);
+
+      if (error) {
+        alert("Purchase failed: " + error.message);
+      } else {
+        alert("Purchase successful! You can now access this course in the LMS.");
+        await refreshData();
+      }
+    }
+  };
+
   const renderPage = () => {
     if (isLoading) {
       return (
@@ -318,7 +357,7 @@ const App: React.FC = () => {
 
     switch (currentPage) {
       case 'home':
-        return <Home courses={courses} products={products} instructors={instructors} onApply={() => handlePageChange('admissions')} onBuy={() => handlePageChange('sales')} onExploreCourses={() => handlePageChange('courses')} onDonateClick={() => handlePageChange('donate')} onLoginClick={handleLoginTrigger} onSignupClick={() => handlePageChange('admissions')} />;
+        return <Home courses={courses} products={products} instructors={instructors} onApply={() => handlePageChange('admissions')} onBuy={() => handlePageChange('sales')} onBuyCourse={handleBuyCourse} onExploreCourses={() => handlePageChange('courses')} onDonateClick={() => handlePageChange('donate')} onLoginClick={handleLoginTrigger} onSignupClick={() => handlePageChange('admissions')} />;
       case 'about': return <About instructors={instructors} />;
       case 'donate': return <Donate />;
       case 'results': return <Results admissions={admissions} results={results} courses={courses} />;
@@ -327,7 +366,7 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto px-6 py-24">
             <div className="mb-16"><h2 className="type-h2">Available Programs</h2><p className="type-body mt-4">Browse our current technical and vocational offerings.</p></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {courses.map(course => <CourseCard key={course.id} course={course} onApply={() => handlePageChange('admissions')} />)}
+              {courses.map(course => <CourseCard key={course.id} course={course} onApply={() => handlePageChange('admissions')} onBuy={handleBuyCourse} />)}
             </div>
           </div>
         );
@@ -417,7 +456,7 @@ const App: React.FC = () => {
         <footer className="relative bg-brand-dark text-white pt-16 pb-10 px-6 no-print overflow-hidden border-t border-brand-primary/10">
             
             {/* Subtle Background Watermark */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.03] select-none font-urdu text-[10rem] md:text-[14rem] flex items-center justify-center whitespace-nowrap">
+            <div className="absolute inset-0 pointer-events-none opacity-[0.03] select-none font-urdu text-5xl md:text-7xl lg:text-9xl flex items-center justify-center whitespace-nowrap overflow-hidden">
               اکبر خان ٹیکنیکل انسٹیٹیوٹ
             </div>
 
@@ -466,7 +505,7 @@ const App: React.FC = () => {
                          <MapPin className="w-4 h-4 text-brand-primary/60 shrink-0 mt-0.5 group-hover:text-brand-primary transition-colors" />
                          <p className="text-sm font-medium text-teal-100/80 leading-relaxed group-hover:text-white transition-colors">
                             2nd Floor, BAAZ PLAZA,<br/>
-                            Gujar Garhi Bypass,<br/>
+                            Gujar Garhi Bypass, Charsadda chowk<br/>
                             Mardan, KP, Pakistan.
                          </p>
                       </a>

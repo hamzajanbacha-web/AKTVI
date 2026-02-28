@@ -7,7 +7,7 @@ import {
 import { 
   Settings, Plus, Trash2, CheckCircle, XCircle, 
   BarChart3, Eye, Printer, Edit3, Mail, 
-  Video, UserMinus, UserX, UserCheck, FileText, Download, User as UserIcon, Phone, MapPin, Briefcase, GraduationCap
+  Video, UserMinus, UserX, UserCheck, FileText, Download, User as UserIcon, Phone, MapPin, Briefcase, GraduationCap, PlaySquare
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -50,10 +50,11 @@ const Admin: React.FC<AdminProps> = ({
   const printRef = useRef<HTMLDivElement>(null);
 
   // Local Form States
-  const [courseForm, setCourseForm] = useState<Partial<Course>>({ name: '', instructorName: '', thumbnail: '', duration: '', status: 'Active', mode: 'ON CAMPUS', description: '' });
+  const [courseForm, setCourseForm] = useState<Partial<Course>>({ name: '', instructorName: '', thumbnail: '', duration: '', status: 'Active', mode: 'ON CAMPUS', description: '', price: 0, isPremium: false, previewVideoUrl: '' });
   const [facultyForm, setFacultyForm] = useState({ name: '', username: '', password: '', email: '', qualification: '', subject: '', assignment: '' });
   const [resultForm, setResultForm] = useState<Partial<ExamResult>>({ studentId: '', examType: 'Final Exam', paperTotal: 100, paperObtained: 0, practicalTotal: 50, practicalObtained: 0, remarks: '' });
   const [scheduleForm, setScheduleForm] = useState({ courseId: '', topic: '', startTime: '' });
+  const [recordingForm, setRecordingForm] = useState({ courseId: '', topic: '', videoUrl: '', thumbnailUrl: '' });
   const [alertForm, setAlertForm] = useState<Partial<NewsAlert>>({ category: 'Urgent', title: '', content: '', actionText: 'Learn More', actionPage: 'home', priority: 'Normal', expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] });
 
   const logEmail = (msg: string) => {
@@ -80,7 +81,10 @@ const Admin: React.FC<AdminProps> = ({
           duration: courseForm.duration,
           status: courseForm.status,
           mode: courseForm.mode,
-          description: courseForm.description
+          description: courseForm.description,
+          price: courseForm.price,
+          is_premium: courseForm.isPremium,
+          preview_video_url: courseForm.previewVideoUrl
         }).eq('id', selectedItem.id);
       } else {
         await onAddCourse(courseForm);
@@ -147,6 +151,27 @@ const Admin: React.FC<AdminProps> = ({
     }
   };
 
+  const handleRecordingSubmit = async () => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.from('session_schedules').insert({
+        course_id: recordingForm.courseId,
+        topic: recordingForm.topic,
+        start_time: new Date().toISOString(),
+        status: 'Completed',
+        video_url: recordingForm.videoUrl,
+        thumbnail_url: recordingForm.thumbnailUrl
+      });
+      if (error) throw error;
+      setModalType(null);
+      onRefreshData();
+    } catch (err: any) {
+      alert("Error adding recording: " + err.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleApproveAdmission = async (adm: AdmissionForm) => {
     if (!confirm(`Approve ${adm.firstName}? This will create a student account and send an email.`)) return;
     setIsSyncing(true);
@@ -174,7 +199,7 @@ const Admin: React.FC<AdminProps> = ({
     setIsSyncing(true);
     try {
       await onUpdateRegisterStatus(reg.id, newStatus);
-      const email = admissions.find(a => a.id === reg.admission_id)?.email || 'N/A';
+      const email = admissions.find(a => a.id === reg.admissionId)?.email || 'N/A';
       logEmail(`NOTIFY: Student status changed to ${newStatus}. Alert sent to ${email}`);
     } finally {
       setIsSyncing(false);
@@ -184,7 +209,7 @@ const Admin: React.FC<AdminProps> = ({
   const MasterStudentView = ({ data, isEnrolled = false }: { data: any, isEnrolled?: boolean }) => {
     // Merge data from admission form if it's a register entry
     const admissionData = isEnrolled 
-      ? admissions.find(a => a.id.toString() === data.admission_id?.toString()) 
+      ? admissions.find(a => a.id.toString() === data.admissionId?.toString()) 
       : data;
 
     if (!admissionData) return <div className="p-10 text-center">Data Not Found</div>;
@@ -217,8 +242,8 @@ const Admin: React.FC<AdminProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                  {isEnrolled && (
                    <>
-                    <div><span className={masterLabel}>Reg Number</span><p className="text-sm font-mono font-black text-teal-900">{data.reg_number}</p></div>
-                    <div><span className={masterLabel}>Serial</span><p className="text-sm font-mono font-black text-slate-400">#{data.enrollment_serial}</p></div>
+                    <div><span className={masterLabel}>Reg Number</span><p className="text-sm font-mono font-black text-teal-900">{data.regNumber}</p></div>
+                    <div><span className={masterLabel}>Serial</span><p className="text-sm font-mono font-black text-slate-400">#{data.enrollmentSerial}</p></div>
                     <div><span className={masterLabel}>Current Status</span><span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[9px] font-black uppercase tracking-widest">{data.status}</span></div>
                    </>
                  )}
@@ -389,6 +414,9 @@ const Admin: React.FC<AdminProps> = ({
                     <div className="mt-auto pt-6 border-t border-slate-50 flex gap-2">
                         <button onClick={() => { setScheduleForm({ ...scheduleForm, courseId: course.id }); setModalType('schedule'); }} className="flex-1 py-3 bg-brand-slate text-teal-800 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50 transition-all flex items-center justify-center gap-2">
                           <Video className="w-3.5 h-3.5" /> Schedule Live
+                        </button>
+                        <button onClick={() => { setRecordingForm({ ...recordingForm, courseId: course.id }); setModalType('recording'); }} className="flex-1 py-3 bg-brand-slate text-teal-800 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50 transition-all flex items-center justify-center gap-2">
+                          <PlaySquare className="w-3.5 h-3.5" /> Add Recording
                         </button>
                     </div>
                   </div>
@@ -568,9 +596,9 @@ const Admin: React.FC<AdminProps> = ({
                     <tbody className="divide-y divide-slate-50">
                       {admissionWithdrawal.map(reg => (
                         <tr key={reg.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className={`p-8 ${idCell}`}>{reg.reg_number}</td>
+                            <td className={`p-8 ${idCell}`}>{reg.regNumber}</td>
                             <td className="p-8">
-                              <p className="text-xs font-black text-slate-900 uppercase">{reg.student_name}</p>
+                              <p className="text-xs font-black text-slate-900 uppercase">{reg.studentName}</p>
                               <p className="text-[9px] font-mono text-slate-400 mt-1">{reg.cnic}</p>
                             </td>
                             <td className="p-8">
@@ -618,6 +646,7 @@ const Admin: React.FC<AdminProps> = ({
                      {modalType === 'faculty' && 'Recruit Faculty'}
                      {modalType === 'result' && 'Performance Entry'}
                      {modalType === 'schedule' && 'Schedule Live Class'}
+                     {modalType === 'recording' && 'Add Recorded Session'}
                      {modalType === 'news' && 'Flash News Command Center'}
                      {modalType === 'view_master' && 'Admission Application Master'}
                      {modalType === 'view_student_master' && 'Permanent Student Record'}
@@ -647,6 +676,16 @@ const Admin: React.FC<AdminProps> = ({
                          </div>
                       </div>
                       <div className="space-y-2"><label className={typeLabel}>Description</label><textarea value={courseForm.description} onChange={e => setCourseForm({...courseForm, description: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-medium text-sm h-32" /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2 flex flex-col justify-center">
+                           <label className="flex items-center gap-3 cursor-pointer">
+                             <input type="checkbox" checked={courseForm.isPremium} onChange={e => setCourseForm({...courseForm, isPremium: e.target.checked})} className="w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
+                             <span className={typeLabel}>Premium Course</span>
+                           </label>
+                         </div>
+                         <div className="space-y-2"><label className={typeLabel}>Price (PKR)</label><input type="number" value={courseForm.price || 0} onChange={e => setCourseForm({...courseForm, price: parseFloat(e.target.value)})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" disabled={!courseForm.isPremium} /></div>
+                      </div>
+                      <div className="space-y-2"><label className={typeLabel}>Preview Video URL</label><input type="text" value={courseForm.previewVideoUrl || ''} onChange={e => setCourseForm({...courseForm, previewVideoUrl: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" placeholder="https://..." disabled={!courseForm.isPremium} /></div>
                       <button onClick={handleCourseSubmit} className="w-full py-5 bg-teal-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Commit Changes</button>
                    </div>
                  )}
@@ -737,6 +776,15 @@ const Admin: React.FC<AdminProps> = ({
                       <div className="space-y-2"><label className={typeLabel}>Lecture Topic</label><input type="text" value={scheduleForm.topic} onChange={e => setScheduleForm({...scheduleForm, topic: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
                       <div className="space-y-2"><label className={typeLabel}>Broadcast Time</label><input type="datetime-local" value={scheduleForm.startTime} onChange={e => setScheduleForm({...scheduleForm, startTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" /></div>
                       <button onClick={handleScheduleSubmit} className="w-full py-5 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Broadast Schedule</button>
+                   </div>
+                 )}
+
+                 {modalType === 'recording' && (
+                   <div className="space-y-6">
+                      <div className="space-y-2"><label className={typeLabel}>Lecture Topic</label><input type="text" value={recordingForm.topic} onChange={e => setRecordingForm({...recordingForm, topic: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold uppercase text-xs" placeholder="e.g. Introduction to React" /></div>
+                      <div className="space-y-2"><label className={typeLabel}>Video URL (MP4, WebM, etc.)</label><input type="url" value={recordingForm.videoUrl} onChange={e => setRecordingForm({...recordingForm, videoUrl: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs" placeholder="https://example.com/video.mp4" /></div>
+                      <div className="space-y-2"><label className={typeLabel}>Thumbnail URL (Optional)</label><input type="url" value={recordingForm.thumbnailUrl} onChange={e => setRecordingForm({...recordingForm, thumbnailUrl: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xs" placeholder="https://example.com/thumb.jpg" /></div>
+                      <button onClick={handleRecordingSubmit} className="w-full py-5 bg-brand-primary text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Add Recording</button>
                    </div>
                  )}
 
